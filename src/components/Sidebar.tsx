@@ -1,5 +1,5 @@
 import { NavLink } from 'react-router-dom';
-import { LayoutDashboard, Settings, PieChart, BarChart2, Bell, Lock, CalendarDays, Package, Dices, ShoppingCart, Inbox, Tag } from 'lucide-react';
+import { LayoutDashboard, Settings, PieChart, BarChart2, Bell, Lock, CalendarDays, Package, Dices, ShoppingCart, Inbox, Tag, Store } from 'lucide-react';
 import './Sidebar.css';
 
 export default function Sidebar() {
@@ -42,6 +42,12 @@ export default function Sidebar() {
             <NavLink to="/stock" className={({ isActive }) => `nav-link ${isActive ? 'active' : ''}`}>
               <Package size={20} />
               <span>Stock</span>
+            </NavLink>
+          </li>
+          <li className="nav-item">
+            <NavLink to="/tiendanube" className={({ isActive }) => `nav-link ${isActive ? 'active' : ''}`}>
+              <Store size={20} />
+              <span>TiendaNube</span>
             </NavLink>
           </li>
           <li className="nav-item">

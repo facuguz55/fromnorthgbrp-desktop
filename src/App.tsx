@@ -12,6 +12,7 @@ import Ruleta from './pages/Ruleta';
 import SeguimientosEnviados from './pages/SeguimientosEnviados';
 import SheetViewer from './pages/SheetViewer';
 import Ventas from './pages/Ventas';
+import TiendanubeVentas from './pages/TiendanubeVentas';
 import Mails from './pages/Mails';
 import Cupones from './pages/Cupones';
 import { getSettings } from './services/dataService';
@@ -52,6 +53,7 @@ function App() {
             <Route path="/sheet-viewer" element={<SheetViewer />} />
             <Route path="/mails" element={<Mails />} />
             <Route path="/ventas" element={<Ventas />} />
+            <Route path="/tiendanube" element={<TiendanubeVentas />} />
             <Route path="/cupones" element={<Cupones />} />
             <Route path="/settings" element={<Settings />} />
             <Route path="*" element={<Navigate to="/dashboard" replace />} />

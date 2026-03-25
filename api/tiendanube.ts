@@ -1,0 +1,58 @@
+export const config = { runtime: 'edge' };
+
+export default async function handler(req: Request): Promise<Response> {
+  const CORS = {
+    'Access-Control-Allow-Origin': '*',
+    'Access-Control-Allow-Methods': 'GET, OPTIONS',
+    'Access-Control-Allow-Headers': 'Content-Type',
+  };
+
+  if (req.method === 'OPTIONS') {
+    return new Response(null, { headers: CORS });
+  }
+
+  const url = new URL(req.url);
+  const storeId = url.searchParams.get('storeId');
+  const token   = url.searchParams.get('token');
+  const path    = url.searchParams.get('path') ?? 'orders';
+
+  url.searchParams.delete('storeId');
+  url.searchParams.delete('token');
+  url.searchParams.delete('path');
+
+  if (!storeId || !token) {
+    return new Response(JSON.stringify({ error: 'Missing storeId or token' }), {
+      status: 400,
+      headers: { 'Content-Type': 'application/json', ...CORS },
+    });
+  }
+
+  const tnUrl = `https://api.tiendanube.com/v1/${storeId}/${path}?${url.searchParams}`;
+
+  try {
+    const tnRes = await fetch(tnUrl, {
+      headers: {
+        Authentication: `bearer ${token}`,
+        'User-Agent': 'NovaDashboard (contact@fromnorthgb.com)',
+      },
+    });
+
+    const body = await tnRes.text();
+
+    const headers: Record<string, string> = {
+      'Content-Type': 'application/json',
+      ...CORS,
+    };
+    const link  = tnRes.headers.get('Link');
+    const count = tnRes.headers.get('X-Total-Count');
+    if (link)  headers['Link']           = link;
+    if (count) headers['X-Total-Count']  = count;
+
+    return new Response(body, { status: tnRes.status, headers });
+  } catch (err) {
+    return new Response(JSON.stringify({ error: 'Proxy error', detail: String(err) }), {
+      status: 500,
+      headers: { 'Content-Type': 'application/json', ...CORS },
+    });
+  }
+}
