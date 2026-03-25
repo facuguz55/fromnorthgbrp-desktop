@@ -23,15 +23,15 @@ export async function fetchMailsCache(): Promise<unknown[]> {
 
 export async function saveMailsCache(mails: unknown[]): Promise<void> {
   try {
-    await fetch(`${SUPABASE_URL}/rest/v1/mails_cache?id=eq.1`, {
-      method: 'PATCH',
+    await fetch(`${SUPABASE_URL}/rest/v1/mails_cache`, {
+      method: 'POST',
       headers: {
         apikey: SUPABASE_ANON_KEY,
         Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
         'Content-Type': 'application/json',
-        Prefer: 'return=minimal',
+        Prefer: 'resolution=merge-duplicates,return=minimal',
       },
-      body: JSON.stringify({ mails, updated_at: new Date().toISOString() }),
+      body: JSON.stringify({ id: 1, mails, updated_at: new Date().toISOString() }),
     });
   } catch {
     // silencioso — el cache es opcional
