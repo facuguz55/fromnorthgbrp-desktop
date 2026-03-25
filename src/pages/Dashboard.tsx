@@ -116,7 +116,7 @@ export default function Dashboard() {
 
       {/* ── Métricas ── */}
       <div className="metrics-grid">
-        <MetricCard title="Ganancia Total"   value={`$${fmt(metrics.gananciaTotal)}`} icon={<DollarSign size={18} />} />
+        <MetricCard title="Ganancia Total"   value={`$${fmtInt(metrics.gananciaTotal)}`} icon={<DollarSign size={18} />} />
         <MetricCard title="Ventas Hoy"       value={`$${fmt(metrics.ventasHoy)}`}      icon={<Activity size={18} />}     subtitle={resets.labelHoy} />
         <MetricCard title="Ventas Semana"    value={`$${fmt(metrics.ventasSemana)}`}   icon={<CalendarDays size={18} />} subtitle={resets.labelSemana} />
         <Link to="/seguimientos-enviados" className="metric-card-link">
