@@ -445,7 +445,8 @@ export default function Mails() {
 
         {/* Lista */}
         <div className="mails-list">
-          {loading && <MailSkeleton />}
+          {/* Skeleton solo si está cargando Y no hay mails del cache */}
+          {loading && filtered.length === 0 && <MailSkeleton />}
 
           {!loading && error && (
             <div className="list-error">
@@ -462,7 +463,6 @@ export default function Mails() {
               {filtro === 'todos'
                 ? 'No hay mails disponibles'
                 : `No hay mails en la categoría "${CAT[filtro as Categoria]?.label ?? filtro}"`}
-              {/* Panel de debug: muestra la respuesta cruda del webhook */}
               {debugRaw && filtro === 'todos' && (
                 <details className="debug-panel">
                   <summary>Ver respuesta del webhook (debug)</summary>
@@ -472,7 +472,7 @@ export default function Mails() {
             </div>
           )}
 
-          {!loading && !error && filtered.map(mail => (
+          {filtered.length > 0 && filtered.map(mail => (
             <div
               key={mail.id}
               className={`mail-item ${selected?.id === mail.id ? 'active' : ''}`}
