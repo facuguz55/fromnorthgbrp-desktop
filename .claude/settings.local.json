@@ -8,8 +8,6 @@
       "Bash(curl:*)",
       "Bash(npx tsc:*)",
       "Bash(npm run:*)",
-      "Bash(git -C /c/Users/facui/.gemini/antigravity/scratch/saas-dashboard log --oneline -5)",
-      "Bash(git -C /c/Users/facui/.gemini/antigravity/scratch/saas-dashboard diff HEAD)",
       "Bash(git:*)"
     ]
   }
