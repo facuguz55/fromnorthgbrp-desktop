@@ -99,7 +99,7 @@ function parseAmount(s: string | null | undefined): number {
 
 function dayLabel(isoDate: string): string {
   return new Date(isoDate).toLocaleDateString('es-AR', {
-    day: '2-digit', month: '2-digit',
+    day: '2-digit', month: '2-digit', year: 'numeric',
     timeZone: 'America/Argentina/Buenos_Aires',
   });
 }
@@ -153,6 +153,12 @@ function loadPersistedCache(): { data: TNMetrics; ts: number } | null {
     if (!raw) return null;
     const parsed = JSON.parse(raw) as { data: TNMetrics; ts: number };
     if (!parsed?.data || !parsed?.ts) return null;
+    // Invalidar cache viejo donde las fechas no tienen año (formato DD/MM sin año)
+    const sample = parsed.data.ventasPorDia?.[0]?.name ?? '';
+    if (sample && sample.split('/').length < 3) {
+      localStorage.removeItem(CACHE_KEY);
+      return null;
+    }
     return parsed;
   } catch {
     return null;

@@ -1,10 +1,10 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import MetricCard from '../components/MetricCard';
 import SalesChart from '../components/SalesChart';
 import {
   RefreshCw, DollarSign, Activity, CalendarDays,
-  ShoppingBag, Trophy, ShoppingCart, Store, UserCheck, MousePointerClick, Users,
+  ShoppingBag, Trophy, ShoppingCart, Store, UserCheck, MousePointerClick, Users, X,
 } from 'lucide-react';
 import { getSettings, fetchSheetRowCount } from '../services/dataService';
 import { fetchTNMetrics, clearTNCache, getPersistedMetrics } from '../services/tiendanubeService';
@@ -53,8 +53,25 @@ export default function Dashboard() {
   const [error, setError]             = useState(false);
   const [lastRefreshed, setLastRefreshed] = useState<Date>(new Date());
   const [resets, setResets]           = useState(getResetLabels);
-  const [clicksCount, setClicksCount]         = useState<number | null>(null);
-  const [convertidosCount, setConvertidosCount] = useState<number | null>(null);
+  const [clicksCount, setClicksCount]               = useState<number | null>(null);
+  const [convertidosCount, setConvertidosCount]     = useState<number | null>(null);
+  const [showRecurrentes, setShowRecurrentes]       = useState(false);
+
+  const recurrentesLista = useMemo(() => {
+    if (!metrics) return [];
+    const map: Record<string, { nombre: string; email: string; pedidos: number; total: number }> = {};
+    for (const o of metrics.orders) {
+      if (o.payment_status !== 'paid' && o.payment_status !== 'authorized') continue;
+      const email  = o.customer?.email ?? '';
+      const nombre = o.customer?.name  ?? '';
+      const key    = email || nombre;
+      if (!key) continue;
+      if (!map[key]) map[key] = { nombre, email, pedidos: 0, total: 0 };
+      map[key].pedidos++;
+      map[key].total += parseFloat(o.total);
+    }
+    return Object.values(map).filter(c => c.pedidos > 1).sort((a, b) => b.pedidos - a.pedidos);
+  }, [metrics]);
 
   useEffect(() => {
     const id = setInterval(() => setResets(getResetLabels()), 60_000);
@@ -128,7 +145,9 @@ export default function Dashboard() {
           <MetricCard title="Ganancia Total (90d)"  value={`$${fmtInt(metrics.totalFacturado)}`} icon={<DollarSign size={18} />} />
           <MetricCard title="Ventas Hoy"            value={`$${fmt(metrics.ventasHoy)}`}         icon={<Activity size={18} />}     subtitle={resets.labelHoy} />
           <MetricCard title="Ventas Semana"         value={`$${fmt(metrics.ventasSemana)}`}      icon={<CalendarDays size={18} />} subtitle={resets.labelSemana} />
-          <MetricCard title="Clientes recurrentes"  value={fmtInt(metrics.clientesRecurrentes)}  icon={<UserCheck size={18} />} subtitle={`${fmtInt(metrics.clientesNuevos)} nuevos`} />
+          <div className="metric-card-link" onClick={() => setShowRecurrentes(true)} style={{ cursor: 'pointer' }}>
+            <MetricCard title="Clientes recurrentes" value={fmtInt(metrics.clientesRecurrentes)} icon={<UserCheck size={18} />} subtitle="Ver lista →" />
+          </div>
           <Link
             to="/sheet-viewer"
             state={{ gid: GID_CLICKS, title: 'Clicks de seguimiento', subtitle: 'Registros de clicks' }}
@@ -238,6 +257,57 @@ export default function Dashboard() {
         <div className="dashboard-empty glass-panel">
           <Store size={36} style={{ color: 'var(--accent-primary)', opacity: 0.6 }} />
           <p>Configurá tu <strong>Store ID</strong> y <strong>Access Token</strong> de TiendaNube en <a href="/settings" style={{ color: 'var(--accent-primary)' }}>Configuración</a>.</p>
+        </div>
+      )}
+
+      {/* ── Modal: Clientes Recurrentes ── */}
+      {showRecurrentes && (
+        <div className="recurrentes-overlay" onClick={() => setShowRecurrentes(false)}>
+          <div className="recurrentes-modal glass-panel" onClick={e => e.stopPropagation()}>
+            <div className="recurrentes-modal-header">
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                <UserCheck size={18} style={{ color: 'var(--accent-primary)' }} />
+                <h2 style={{ margin: 0, fontSize: '1rem', fontWeight: 700 }}>Clientes recurrentes</h2>
+                <span style={{ fontSize: '0.72rem', background: 'rgba(255,255,255,0.05)', border: '1px solid var(--border-color)', borderRadius: '999px', padding: '0.15rem 0.55rem', color: 'var(--text-muted)' }}>
+                  {recurrentesLista.length}
+                </span>
+              </div>
+              <button className="rec-close-btn" onClick={() => setShowRecurrentes(false)}>
+                <X size={18} />
+              </button>
+            </div>
+            <p style={{ fontSize: '0.78rem', color: 'var(--text-muted)', margin: '0.25rem 0 1rem' }}>
+              Clientes con más de una compra (últimos 90 días), ordenados por pedidos.
+            </p>
+            {recurrentesLista.length === 0 ? (
+              <div style={{ textAlign: 'center', color: 'var(--text-muted)', padding: '2rem', fontSize: '0.82rem' }}>
+                Sin clientes recurrentes en este período
+              </div>
+            ) : (
+              <div style={{ overflowX: 'auto', maxHeight: '60vh', overflowY: 'auto' }}>
+                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.82rem' }}>
+                  <thead>
+                    <tr>
+                      {['#', 'Cliente', 'Email', 'Pedidos', 'Total gastado'].map(h => (
+                        <th key={h} style={{ textAlign: 'left', padding: '0 0.75rem 0.6rem', fontSize: '0.68rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--text-muted)', borderBottom: '1px solid var(--border-color)', whiteSpace: 'nowrap' }}>{h}</th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {recurrentesLista.map((c, i) => (
+                      <tr key={c.email || c.nombre}>
+                        <td style={{ padding: '0.65rem 0.75rem', color: 'var(--text-muted)', borderBottom: '1px solid rgba(255,255,255,0.03)' }}>{i + 1}</td>
+                        <td style={{ padding: '0.65rem 0.75rem', color: 'var(--text-primary)', fontWeight: 500, borderBottom: '1px solid rgba(255,255,255,0.03)' }}>{c.nombre || '—'}</td>
+                        <td style={{ padding: '0.65rem 0.75rem', color: 'var(--text-muted)', fontSize: '0.75rem', borderBottom: '1px solid rgba(255,255,255,0.03)' }}>{c.email || '—'}</td>
+                        <td style={{ padding: '0.65rem 0.75rem', fontWeight: 700, color: 'var(--accent-primary)', borderBottom: '1px solid rgba(255,255,255,0.03)' }}>{c.pedidos}</td>
+                        <td style={{ padding: '0.65rem 0.75rem', color: 'var(--text-secondary)', borderBottom: '1px solid rgba(255,255,255,0.03)' }}>${fmt(c.total)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
         </div>
       )}
 
