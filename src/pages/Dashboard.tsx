@@ -6,7 +6,7 @@ import SalesChart from '../components/SalesChart';
 import {
   Mail, MousePointerClick, Users, RefreshCw,
   DollarSign, Activity, CalendarDays,
-  CreditCard, ShoppingCart,
+  ShoppingBag, Trophy, CreditCard, ShoppingCart,
 } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { getSettings, fetchGoogleSheetsMetrics } from '../services/dataService';
@@ -129,6 +129,60 @@ export default function Dashboard() {
           <MetricCard title="Seguimientos Convertidos" value={fmtInt(metrics.seguimientos)} icon={<Users size={18} />} subtitle="Ver clientes →" />
         </Link>
       </div>
+
+      {/* ── Top listas: Productos + Compradores ── */}
+      {(metrics.topProductos.length > 0 || metrics.topCompradores.length > 0) && (
+        <div className="insights-grid desktop-only">
+
+          {metrics.topProductos.length > 0 && (
+            <div className="insight-card glass-panel">
+              <div className="insight-header">
+                <ShoppingBag size={15} className="insight-icon" />
+                <h3>Productos más vendidos</h3>
+              </div>
+              <ol className="ranking-list">
+                {metrics.topProductos.map((p, i) => (
+                  <li key={p.nombre} className="ranking-item">
+                    <span className={`ranking-pos pos-${i + 1}`}>{i + 1}</span>
+                    <span className="ranking-name" title={p.nombre}>{p.nombre}</span>
+                    <div className="ranking-right">
+                      <span className="ranking-sub">{fmtInt(p.cantidad)} uds.</span>
+                      <span className="ranking-value">${fmt(p.total)}</span>
+                    </div>
+                  </li>
+                ))}
+              </ol>
+            </div>
+          )}
+
+          {metrics.topCompradores.length > 0 && (
+            <div className="insight-card glass-panel">
+              <div className="insight-header">
+                <Trophy size={15} className="insight-icon insight-gold" />
+                <h3>Mejores compradores</h3>
+              </div>
+              <ol className="ranking-list">
+                {metrics.topCompradores.map((c, i) => (
+                  <li key={c.email || c.nombre} className="ranking-item">
+                    <span className={`ranking-pos pos-${i + 1}`}>{i + 1}</span>
+                    <div className="ranking-buyer">
+                      <span className="ranking-name" title={c.nombre || c.email}>
+                        {c.nombre || c.email}
+                      </span>
+                      {c.nombre && <span className="ranking-email">{c.email}</span>}
+                    </div>
+                    <div className="ranking-right">
+                      <span className="ranking-sub">{c.pedidos} pedido{c.pedidos !== 1 ? 's' : ''}</span>
+                      <span className="ranking-value">${fmt(c.total)}</span>
+                    </div>
+                  </li>
+                ))}
+              </ol>
+            </div>
+          )}
+
+        </div>
+      )}
 
       {/* ── Última venta ── */}
       {metrics.ultimaVenta && (
