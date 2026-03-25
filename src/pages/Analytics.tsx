@@ -3,43 +3,65 @@ import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
   PieChart, Pie, Cell, Legend,
 } from 'recharts';
-import { RefreshCw, Clock, CreditCard, Users, UserCheck, UserPlus } from 'lucide-react';
+import {
+  RefreshCw, Clock, Users, UserCheck, UserPlus,
+  TrendingUp, ShoppingCart, Package, Trophy,
+} from 'lucide-react';
 import { getSettings } from '../services/dataService';
-import { fetchTNMetrics } from '../services/tiendanubeService';
-
-interface MetodoPago { name: string; value: number; porcentaje: number; }
+import {
+  fetchTNMetrics,
+  paymentStatusLabel,
+  paymentStatusClass,
+} from '../services/tiendanubeService';
+import type { TNMetrics, TNOrder } from '../services/tiendanubeService';
 import '../components/Chart.css';
 import './Analytics.css';
+import './TiendanubeVentas.css';
 
-const PIE_COLORS = ['#06b6d4', '#6366f1', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899'];
+interface MetodoPago { name: string; value: number; porcentaje: number; color: string; }
+
+const PALETTE = [
+  '#06b6d4', '#6366f1', '#10b981', '#f59e0b',
+  '#ef4444', '#8b5cf6', '#ec4899', '#14b8a6',
+];
+
+const fmtARS = (n: number) =>
+  n.toLocaleString('es-AR', { style: 'currency', currency: 'ARS', maximumFractionDigits: 0 });
+
+const fmtNum = (n: number) =>
+  n.toLocaleString('es-AR', { maximumFractionDigits: 0 });
 
 // ── Tooltips ──────────────────────────────────────────────────────────────────
+
+const DiaTooltip = ({ active, payload, label }: any) => {
+  if (!active || !payload?.length) return null;
+  return (
+    <div className="chart-tooltip">
+      <p className="chart-tooltip-label">{label}</p>
+      <p className="chart-tooltip-value" style={{ color: '#06b6d4' }}>{fmtARS(payload[0].value)}</p>
+    </div>
+  );
+};
+
+const MetodoTooltip = ({ active, payload }: any) => {
+  if (!active || !payload?.length) return null;
+  const d = payload[0].payload as MetodoPago;
+  return (
+    <div className="chart-tooltip">
+      <p className="chart-tooltip-label">{d.name}</p>
+      <p className="chart-tooltip-value" style={{ color: d.color }}>{d.value} órdenes</p>
+      <p className="chart-tooltip-sub">{d.porcentaje}% del total</p>
+    </div>
+  );
+};
 
 const HourTooltip = ({ active, payload, label }: any) => {
   if (active && payload && payload.length) {
     return (
       <div className="chart-tooltip">
         <p className="chart-tooltip-label">{label}</p>
-        <p className="chart-tooltip-value" style={{ color: '#06b6d4' }}>
-          {payload[0].value}
-        </p>
+        <p className="chart-tooltip-value" style={{ color: '#06b6d4' }}>{payload[0].value}</p>
         <p className="chart-tooltip-sub">ventas en este horario</p>
-      </div>
-    );
-  }
-  return null;
-};
-
-const PagoTooltip = ({ active, payload }: any) => {
-  if (active && payload && payload.length) {
-    const d = payload[0].payload as MetodoPago;
-    return (
-      <div className="chart-tooltip">
-        <p className="chart-tooltip-label">{d.name}</p>
-        <p className="chart-tooltip-value" style={{ color: payload[0].fill }}>
-          {d.value} ventas
-        </p>
-        <p className="chart-tooltip-sub">{d.porcentaje}% del total</p>
       </div>
     );
   }
@@ -51,9 +73,7 @@ const ClientesTooltip = ({ active, payload }: any) => {
     return (
       <div className="chart-tooltip">
         <p className="chart-tooltip-label">{payload[0].name}</p>
-        <p className="chart-tooltip-value" style={{ color: payload[0].fill }}>
-          {payload[0].value}
-        </p>
+        <p className="chart-tooltip-value" style={{ color: payload[0].fill }}>{payload[0].value}</p>
         <p className="chart-tooltip-sub">clientes</p>
       </div>
     );
@@ -61,18 +81,40 @@ const ClientesTooltip = ({ active, payload }: any) => {
   return null;
 };
 
+// ── Orden row ─────────────────────────────────────────────────────────────────
+
+function OrdenRow({ o, i }: { o: TNOrder; i: number }) {
+  const fecha = new Date(o.created_at).toLocaleDateString('es-AR', {
+    day: '2-digit', month: '2-digit', year: '2-digit',
+    hour: '2-digit', minute: '2-digit',
+    timeZone: 'America/Argentina/Buenos_Aires',
+  });
+  return (
+    <tr>
+      <td className="tn-td-num">{i + 1}</td>
+      <td className="tn-td-orden">#{o.number}</td>
+      <td className="tn-td-cliente">
+        <span className="tn-client-name">{o.customer?.name ?? '—'}</span>
+        {o.customer?.email && <span className="tn-client-email">{o.customer.email}</span>}
+      </td>
+      <td className="tn-td-productos">{o.products.map(p => p.name).join(', ') || '—'}</td>
+      <td className="tn-td-total">{fmtARS(parseFloat(o.total))}</td>
+      <td>
+        <span className={`tn-badge ${paymentStatusClass(o.payment_status)}`}>
+          {paymentStatusLabel(o.payment_status)}
+        </span>
+      </td>
+      <td className="tn-td-fecha">{fecha}</td>
+    </tr>
+  );
+}
+
 // ── Component ─────────────────────────────────────────────────────────────────
 
 export default function Analytics() {
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading]           = useState(true);
   const [lastRefreshed, setLastRefreshed] = useState<Date>(new Date());
-  const [data, setData] = useState({
-    ventasPorHora: [] as { name: string; value: number }[],
-    ventasPorDia:  [] as { name: string; value: number }[],
-    metodosPago:   [] as MetodoPago[],
-    clientesNuevos: 0,
-    clientesRecurrentes: 0,
-  });
+  const [metrics, setMetrics]           = useState<TNMetrics | null>(null);
 
   const fetchData = async () => {
     setLoading(true);
@@ -81,14 +123,8 @@ export default function Analytics() {
       const storeId  = settings?.tiendanubeStoreId?.trim() ?? '';
       const token    = settings?.tiendanubeToken?.trim()    ?? '';
       if (!storeId || !token) return;
-      const fetched = await fetchTNMetrics(storeId, token);
-      setData({
-        ventasPorHora:       fetched.ventasPorHora,
-        ventasPorDia:        fetched.ventasPorDia,
-        metodosPago:         fetched.metodosPago,
-        clientesNuevos:      fetched.clientesNuevos,
-        clientesRecurrentes: fetched.clientesRecurrentes,
-      });
+      const data = await fetchTNMetrics(storeId, token);
+      setMetrics(data);
     } catch (err) {
       console.error('Error fetching analytics data:', err);
     } finally {
@@ -99,22 +135,27 @@ export default function Analytics() {
 
   useEffect(() => { fetchData(); }, []);
 
-  // Top 3 horas con más ventas
-  const top3Horas = [...data.ventasPorHora]
+  const metodosConColor: MetodoPago[] = (metrics?.metodosPago ?? []).map((m, i) => ({
+    ...m,
+    color: PALETTE[i % PALETTE.length],
+  }));
+
+  const diasRecientes = metrics?.ventasPorDia.slice(-30) ?? [];
+
+  const top3Horas = [...(metrics?.ventasPorHora ?? [])]
     .sort((a, b) => b.value - a.value)
     .slice(0, 3);
 
-  const totalClientes = data.clientesNuevos + data.clientesRecurrentes;
-  const pctNuevos      = totalClientes > 0 ? Math.round((data.clientesNuevos / totalClientes) * 100) : 0;
-  const pctRecurrentes = totalClientes > 0 ? Math.round((data.clientesRecurrentes / totalClientes) * 100) : 0;
-
-  const clientesPieData = [
-    { name: 'Nuevos',      value: data.clientesNuevos },
-    { name: 'Recurrentes', value: data.clientesRecurrentes },
+  const totalClientes      = (metrics?.clientesNuevos ?? 0) + (metrics?.clientesRecurrentes ?? 0);
+  const pctNuevos          = totalClientes > 0 ? Math.round(((metrics?.clientesNuevos ?? 0) / totalClientes) * 100) : 0;
+  const pctRecurrentes     = totalClientes > 0 ? Math.round(((metrics?.clientesRecurrentes ?? 0) / totalClientes) * 100) : 0;
+  const clientesPieData    = [
+    { name: 'Nuevos',      value: metrics?.clientesNuevos      ?? 0 },
+    { name: 'Recurrentes', value: metrics?.clientesRecurrentes ?? 0 },
   ];
 
-  const hasHoras    = data.ventasPorHora.some(h => h.value > 0);
-  const hasMetodos  = data.metodosPago.length > 0;
+  const hasHoras    = (metrics?.ventasPorHora ?? []).some(h => h.value > 0);
+  const hasMetodos  = metodosConColor.length > 0;
   const hasClientes = totalClientes > 0;
 
   return (
@@ -125,7 +166,7 @@ export default function Analytics() {
         <div>
           <h1>Análisis de Ventas</h1>
           <span className="text-muted analytics-meta">
-            Actualizado: {lastRefreshed.toLocaleTimeString('es-AR')}
+            Últimos 90 días · Actualizado: {lastRefreshed.toLocaleTimeString('es-AR')}
           </span>
         </div>
         <button className="btn-secondary refresh-btn" onClick={fetchData} disabled={loading}>
@@ -134,26 +175,24 @@ export default function Analytics() {
         </button>
       </header>
 
-      {/* ══ SECCIÓN 1: Ventas por Hora ══════════════════════════════════════ */}
+      {/* ══ Facturación diaria ══════════════════════════════════════════════ */}
       <section className="analytics-section">
         <div className="section-title-row">
-          <Clock size={18} className="section-icon" />
-          <h2>Ventas por hora del día</h2>
+          <TrendingUp size={18} className="section-icon" />
+          <h2>Facturación diaria</h2>
         </div>
-        <p className="section-desc">Distribución de compras según la hora en que ocurrieron (0–23 hs).</p>
-
+        <p className="section-desc">Ingresos diarios de órdenes pagadas (últimos 30 días).</p>
         <div className="chart-container glass-panel analytics-chart-tall">
           <div className="chart-header">
             <div className="chart-header-row">
-              <span className="chart-title">Compras por franja horaria</span>
-              <span className="chart-badge">Horario</span>
+              <span className="chart-title">Ventas por día</span>
+              <span className="chart-badge">ARS</span>
             </div>
-            <span className="chart-subtitle">Cantidad de ventas registradas por hora del día</span>
           </div>
-          {hasHoras ? (
+          {diasRecientes.length > 0 ? (
             <div className="chart-wrapper">
               <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={data.ventasPorHora} margin={{ top: 8, right: 12, left: 0, bottom: 0 }}>
+                <BarChart data={diasRecientes} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
                   <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.04)" vertical={false} />
                   <XAxis
                     dataKey="name"
@@ -161,69 +200,44 @@ export default function Analytics() {
                     tick={{ fill: '#475569', fontSize: 10, fontFamily: 'Nunito, Inter, sans-serif' }}
                     tickLine={false}
                     axisLine={false}
-                    interval={1}
+                    interval="preserveStartEnd"
                   />
                   <YAxis
-                    allowDecimals={false}
                     stroke="transparent"
-                    tick={{ fill: '#475569', fontSize: 11, fontFamily: 'Nunito, Inter, sans-serif' }}
+                    tick={{ fill: '#475569', fontSize: 10, fontFamily: 'Nunito, Inter, sans-serif' }}
                     tickLine={false}
                     axisLine={false}
-                    width={32}
+                    width={60}
+                    tickFormatter={v => `$${(v / 1000).toFixed(0)}k`}
                   />
-                  <Tooltip content={<HourTooltip />} cursor={{ fill: 'rgba(6,182,212,0.06)' }} />
-                  <Bar dataKey="value" radius={[4, 4, 0, 0]}>
-                    {data.ventasPorHora.map((entry, index) => (
-                      <Cell
-                        key={`cell-${index}`}
-                        fill={
-                          top3Horas.some(t => t.name === entry.name)
-                            ? '#06b6d4'
-                            : 'rgba(6,182,212,0.3)'
-                        }
-                      />
-                    ))}
-                  </Bar>
+                  <Tooltip content={<DiaTooltip />} cursor={{ fill: 'rgba(6,182,212,0.06)' }} />
+                  <Bar dataKey="value" fill="#06b6d4" radius={[4, 4, 0, 0]} />
                 </BarChart>
               </ResponsiveContainer>
             </div>
           ) : (
             <div className="chart-empty">
-              <span>Sin datos disponibles — verificá que la columna "fecha" incluya hora</span>
+              <span>{loading ? 'Cargando...' : 'Sin datos en este período'}</span>
             </div>
           )}
         </div>
-
-        {/* Top 3 horas */}
-        {top3Horas.length > 0 && top3Horas[0].value > 0 && (
-          <div className="top-horas-grid">
-            {top3Horas.map((h, i) => (
-              <div key={h.name} className={`top-hora-card glass-panel top-hora-pos-${i + 1}`}>
-                <span className="top-hora-badge">#{i + 1}</span>
-                <span className="top-hora-time">{h.name}</span>
-                <span className="top-hora-count">{h.value} <span className="top-hora-label">ventas</span></span>
-              </div>
-            ))}
-          </div>
-        )}
       </section>
 
-      {/* ══ SECCIÓN 2 + 3: dos columnas ════════════════════════════════════ */}
+      {/* ══ Métodos de pago + Clientes ══════════════════════════════════════ */}
       <div className="analytics-two-col">
 
         {/* ── Métodos de Pago ── */}
         <section className="analytics-section">
           <div className="section-title-row">
-            <CreditCard size={18} className="section-icon" />
+            <ShoppingCart size={18} className="section-icon" />
             <h2>Métodos de pago</h2>
           </div>
-          <p className="section-desc">Distribución porcentual de los métodos de pago utilizados.</p>
-
+          <p className="section-desc">Distribución de medios de pago en órdenes pagadas.</p>
           <div className="chart-container glass-panel analytics-chart-pie">
             <div className="chart-header">
               <div className="chart-header-row">
-                <span className="chart-title">Distribución de pagos</span>
-                <span className="chart-badge">Pagos</span>
+                <span className="chart-title">Medios de pago</span>
+                <span className="chart-badge">Órdenes</span>
               </div>
               <span className="chart-subtitle">% de ventas por método</span>
             </div>
@@ -233,7 +247,7 @@ export default function Analytics() {
                   <ResponsiveContainer width="100%" height="100%">
                     <PieChart>
                       <Pie
-                        data={data.metodosPago}
+                        data={metodosConColor}
                         cx="50%"
                         cy="50%"
                         innerRadius={55}
@@ -241,11 +255,11 @@ export default function Analytics() {
                         dataKey="value"
                         paddingAngle={3}
                       >
-                        {data.metodosPago.map((_, index) => (
-                          <Cell key={`cell-${index}`} fill={PIE_COLORS[index % PIE_COLORS.length]} />
+                        {metodosConColor.map((entry, i) => (
+                          <Cell key={i} fill={entry.color} />
                         ))}
                       </Pie>
-                      <Tooltip content={<PagoTooltip />} />
+                      <Tooltip content={<MetodoTooltip />} />
                       <Legend
                         formatter={(value) => (
                           <span style={{ color: '#94a3b8', fontSize: '0.72rem' }}>{value}</span>
@@ -255,9 +269,9 @@ export default function Analytics() {
                   </ResponsiveContainer>
                 </div>
                 <div className="metodos-list">
-                  {data.metodosPago.map((m, i) => (
+                  {metodosConColor.map((m, i) => (
                     <div key={m.name} className="metodo-row">
-                      <span className="metodo-dot" style={{ background: PIE_COLORS[i % PIE_COLORS.length] }} />
+                      <span className="metodo-dot" style={{ background: PALETTE[i % PALETTE.length] }} />
                       <span className="metodo-name">{m.name}</span>
                       <span className="metodo-pct">{m.porcentaje}%</span>
                       <span className="metodo-count">{m.value} ventas</span>
@@ -267,7 +281,7 @@ export default function Analytics() {
               </>
             ) : (
               <div className="chart-empty">
-                <span>Sin datos de método de pago</span>
+                <span>{loading ? 'Cargando...' : 'Sin datos de método de pago'}</span>
               </div>
             )}
           </div>
@@ -280,7 +294,6 @@ export default function Analytics() {
             <h2>Clientes nuevos vs recurrentes</h2>
           </div>
           <p className="section-desc">Clientes que compraron una sola vez (nuevos) vs. más de una vez (recurrentes).</p>
-
           <div className="chart-container glass-panel analytics-chart-pie">
             <div className="chart-header">
               <div className="chart-header-row">
@@ -294,13 +307,13 @@ export default function Analytics() {
                 <div className="clientes-stats-row">
                   <div className="cliente-stat-card">
                     <UserPlus size={20} className="cliente-stat-icon nuevos" />
-                    <span className="cliente-stat-num">{data.clientesNuevos}</span>
+                    <span className="cliente-stat-num">{metrics?.clientesNuevos ?? 0}</span>
                     <span className="cliente-stat-label">Nuevos</span>
                     <span className="cliente-stat-pct nuevos-pct">{pctNuevos}%</span>
                   </div>
                   <div className="cliente-stat-card">
                     <UserCheck size={20} className="cliente-stat-icon recurrentes" />
-                    <span className="cliente-stat-num">{data.clientesRecurrentes}</span>
+                    <span className="cliente-stat-num">{metrics?.clientesRecurrentes ?? 0}</span>
                     <span className="cliente-stat-label">Recurrentes</span>
                     <span className="cliente-stat-pct recurrentes-pct">{pctRecurrentes}%</span>
                   </div>
@@ -332,13 +345,135 @@ export default function Analytics() {
               </>
             ) : (
               <div className="chart-empty">
-                <span>Sin datos de clientes disponibles</span>
+                <span>{loading ? 'Cargando...' : 'Sin datos de clientes disponibles'}</span>
               </div>
             )}
           </div>
         </section>
 
       </div>
+
+      {/* ══ Ventas por hora ═════════════════════════════════════════════════ */}
+      <section className="analytics-section">
+        <div className="section-title-row">
+          <Clock size={18} className="section-icon" />
+          <h2>Ventas por hora del día</h2>
+        </div>
+        <p className="section-desc">Distribución de compras según la hora en que ocurrieron (0–23 hs).</p>
+        <div className="chart-container glass-panel analytics-chart-tall">
+          <div className="chart-header">
+            <div className="chart-header-row">
+              <span className="chart-title">Compras por franja horaria</span>
+              <span className="chart-badge">Horario</span>
+            </div>
+            <span className="chart-subtitle">Cantidad de ventas registradas por hora del día</span>
+          </div>
+          {hasHoras ? (
+            <div className="chart-wrapper">
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={metrics?.ventasPorHora} margin={{ top: 8, right: 12, left: 0, bottom: 0 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.04)" vertical={false} />
+                  <XAxis
+                    dataKey="name"
+                    stroke="transparent"
+                    tick={{ fill: '#475569', fontSize: 10, fontFamily: 'Nunito, Inter, sans-serif' }}
+                    tickLine={false}
+                    axisLine={false}
+                    interval={1}
+                  />
+                  <YAxis
+                    allowDecimals={false}
+                    stroke="transparent"
+                    tick={{ fill: '#475569', fontSize: 11, fontFamily: 'Nunito, Inter, sans-serif' }}
+                    tickLine={false}
+                    axisLine={false}
+                    width={32}
+                  />
+                  <Tooltip content={<HourTooltip />} cursor={{ fill: 'rgba(6,182,212,0.06)' }} />
+                  <Bar dataKey="value" radius={[4, 4, 0, 0]}>
+                    {(metrics?.ventasPorHora ?? []).map((entry, index) => (
+                      <Cell
+                        key={`cell-${index}`}
+                        fill={top3Horas.some(t => t.name === entry.name) ? '#06b6d4' : 'rgba(6,182,212,0.3)'}
+                      />
+                    ))}
+                  </Bar>
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+          ) : (
+            <div className="chart-empty">
+              <span>{loading ? 'Cargando...' : 'Sin datos disponibles'}</span>
+            </div>
+          )}
+        </div>
+        {top3Horas.length > 0 && top3Horas[0].value > 0 && (
+          <div className="top-horas-grid">
+            {top3Horas.map((h, i) => (
+              <div key={h.name} className={`top-hora-card glass-panel top-hora-pos-${i + 1}`}>
+                <span className="top-hora-badge">#{i + 1}</span>
+                <span className="top-hora-time">{h.name}</span>
+                <span className="top-hora-count">{h.value} <span className="top-hora-label">ventas</span></span>
+              </div>
+            ))}
+          </div>
+        )}
+      </section>
+
+      {/* ══ Top productos ═══════════════════════════════════════════════════ */}
+      {metrics && metrics.topProductos.length > 0 && (
+        <section className="analytics-section">
+          <div className="section-title-row">
+            <Trophy size={18} className="section-icon" />
+            <h2>Top productos vendidos</h2>
+          </div>
+          <p className="section-desc">Por cantidad de unidades en órdenes pagadas (últimos 90 días).</p>
+          <div className="tn-productos-grid glass-panel">
+            {metrics.topProductos.map((p, i) => (
+              <div key={p.nombre} className="tn-producto-row">
+                <span className="tn-producto-rank">#{i + 1}</span>
+                <span className="tn-producto-nombre">{p.nombre}</span>
+                <span className="tn-producto-cant">{fmtNum(p.cantidad)} u.</span>
+                <span className="tn-producto-total">{fmtARS(p.total)}</span>
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
+
+      {/* ══ Últimas órdenes ═════════════════════════════════════════════════ */}
+      {metrics && metrics.orders.length > 0 && (
+        <section className="analytics-section">
+          <div className="section-title-row">
+            <Package size={18} className="section-icon" />
+            <h2>Últimas órdenes</h2>
+          </div>
+          <p className="section-desc">
+            Órdenes más recientes · {fmtNum(metrics.orders.length)} registros cargados.
+          </p>
+          <div className="tn-table-wrapper glass-panel">
+            <table className="tn-table">
+              <thead>
+                <tr>
+                  <th>#</th>
+                  <th>Orden</th>
+                  <th>Cliente</th>
+                  <th>Productos</th>
+                  <th>Total</th>
+                  <th>Pago</th>
+                  <th>Fecha</th>
+                </tr>
+              </thead>
+              <tbody>
+                {metrics.orders.map((o, i) => (
+                  <OrdenRow key={o.id} o={o} i={i} />
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </section>
+      )}
+
     </div>
   );
 }
