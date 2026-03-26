@@ -5,6 +5,7 @@ import {
 } from 'recharts';
 import {
   RefreshCw, Dices, Gift, Users, Percent, Trophy, Copy, Check, Send,
+  ShoppingBag, TrendingUp, Tag,
 } from 'lucide-react';
 import MetricCard from '../components/MetricCard';
 import {
@@ -14,6 +15,9 @@ import {
   PREMIO_COLOR_MAP,
 } from '../services/supabaseService';
 import type { RuletaMetrics } from '../services/supabaseService';
+import { fetchFNCouponOrders } from '../services/tiendanubeService';
+import type { FNCouponConversion } from '../services/tiendanubeService';
+import { getSettings } from '../services/dataService';
 import '../components/Chart.css';
 import './Ruleta.css';
 
@@ -80,6 +84,11 @@ export default function Ruleta() {
   const [quitarStatus, setQuitarStatus] = useState<'idle' | 'loading' | 'ok' | 'err' | 'none'>('idle');
   const [quitarCount, setQuitarCount]   = useState(0);
 
+  // Conversiones FN
+  const [conversiones,        setConversiones]        = useState<FNCouponConversion[]>([]);
+  const [loadingConversiones, setLoadingConversiones] = useState(true);
+  const [errorConversiones,   setErrorConversiones]   = useState(false);
+
   const fetchData = async () => {
     setLoading(true);
     setError(false);
@@ -93,7 +102,30 @@ export default function Ruleta() {
     setLastRefreshed(new Date());
   };
 
-  useEffect(() => { fetchData(); }, []);
+  const fetchConversiones = async () => {
+    setLoadingConversiones(true);
+    setErrorConversiones(false);
+    try {
+      const settings = getSettings();
+      const storeId  = settings?.tiendanubeStoreId?.trim() ?? '';
+      const token    = settings?.tiendanubeToken?.trim()    ?? '';
+      if (!storeId || !token) {
+        setErrorConversiones(true);
+        return;
+      }
+      const data = await fetchFNCouponOrders(storeId, token);
+      setConversiones(data);
+    } catch {
+      setErrorConversiones(true);
+    } finally {
+      setLoadingConversiones(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchData();
+    fetchConversiones();
+  }, []);
 
   const handleGiroManual = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -463,6 +495,111 @@ export default function Ruleta() {
           <span>Cargando datos de Supabase...</span>
         </div>
       )}
+
+      {/* ── Conversiones FN ── */}
+      <section className="analytics-section ruleta-table-section">
+        <div className="section-title-row">
+          <TrendingUp size={18} className="section-icon" />
+          <h2>Conversiones de cupones FN</h2>
+          <button
+            className="btn-secondary refresh-btn"
+            style={{ marginLeft: 'auto', fontSize: '0.75rem', padding: '0.3rem 0.7rem' }}
+            onClick={fetchConversiones}
+            disabled={loadingConversiones}
+          >
+            <RefreshCw size={13} className={loadingConversiones ? 'spinning' : ''} />
+            {loadingConversiones ? 'Cargando...' : 'Actualizar'}
+          </button>
+        </div>
+        <p className="section-desc">
+          Compras realizadas usando cupones generados por la ruleta (prefijo <code style={{ fontFamily: 'monospace', color: 'var(--accent-primary)' }}>FN</code>).
+        </p>
+
+        {/* KPIs de conversión */}
+        {!loadingConversiones && !errorConversiones && (
+          <div className="ruleta-kpi-grid">
+            <MetricCard
+              title="Conversiones totales"
+              value={conversiones.length}
+              icon={<ShoppingBag size={20} />}
+              subtitle="compras con cupón FN"
+            />
+            <MetricCard
+              title="Facturado con FN"
+              value={`$${conversiones.reduce((s, c) => s + c.total, 0).toLocaleString('es-AR', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`}
+              icon={<TrendingUp size={20} />}
+              subtitle="total en ventas convertidas"
+            />
+            <MetricCard
+              title="Clientes únicos"
+              value={new Set(conversiones.map(c => c.customerEmail)).size}
+              icon={<Users size={20} />}
+              subtitle="emails distintos que compraron"
+            />
+            <MetricCard
+              title="Tasa de conversión"
+              value={metrics && metrics.participantesUnicos > 0
+                ? `${Math.round((new Set(conversiones.map(c => c.customerEmail)).size / metrics.participantesUnicos) * 100)}%`
+                : '—'}
+              icon={<Percent size={20} />}
+              subtitle="participantes que compraron"
+            />
+          </div>
+        )}
+
+        {/* Tabla */}
+        {loadingConversiones ? (
+          <div className="ruleta-loading">
+            <RefreshCw size={20} className="spinning" />
+            <span>Buscando conversiones en TiendaNube...</span>
+          </div>
+        ) : errorConversiones ? (
+          <div className="ruleta-error glass-panel">
+            No se pudo cargar. Verificá el token de TiendaNube en Configuración.
+          </div>
+        ) : conversiones.length === 0 ? (
+          <div className="ruleta-error glass-panel" style={{ background: 'transparent', border: '1px dashed var(--border-color)', color: 'var(--text-muted)' }}>
+            <Tag size={20} style={{ opacity: 0.4 }} />
+            <span>Ninguna compra con cupón FN todavía.</span>
+          </div>
+        ) : (
+          <div className="ruleta-table-wrapper glass-panel">
+            <table className="ruleta-table">
+              <thead>
+                <tr>
+                  <th>Cliente</th>
+                  <th>Email</th>
+                  <th>Cupón</th>
+                  <th>Orden</th>
+                  <th>Total</th>
+                  <th>Fecha</th>
+                </tr>
+              </thead>
+              <tbody>
+                {conversiones.map(c => (
+                  <tr key={c.orderId}>
+                    <td className="ruleta-td-email">{c.customerName}</td>
+                    <td className="ruleta-td-email" title={c.customerEmail}>{c.customerEmail}</td>
+                    <td className="ruleta-td-codigo">
+                      <code className="ruleta-code">{c.couponCode}</code>
+                    </td>
+                    <td className="ruleta-td-id">#{c.orderNumber}</td>
+                    <td style={{ fontWeight: 700, color: 'var(--text-primary)', fontVariantNumeric: 'tabular-nums' }}>
+                      ${c.total.toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                    </td>
+                    <td className="ruleta-td-fecha">
+                      {new Date(c.createdAt).toLocaleDateString('es-AR', {
+                        day: '2-digit', month: '2-digit', year: 'numeric',
+                        timeZone: 'America/Argentina/Buenos_Aires',
+                      })}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </section>
 
     </div>
   );

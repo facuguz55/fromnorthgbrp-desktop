@@ -18,6 +18,8 @@ const DEFAULT_SETTINGS: DashboardSettings = {
   tiendanubeToken: '',
   tiendanubeStoreId: '',
   googleSheetsUrl: '',
+  metaAccessToken: '',
+  metaAdAccountId: '',
   displayName: '',
   accentColor: '#06b6d4',
   compactMode: false,
@@ -208,6 +210,39 @@ export default function Settings() {
                     placeholder="https://docs.google.com/spreadsheets/d/..."
                   />
                   <span className="help-text">Usado para Clicks de seguimiento y Seguimientos convertidos</span>
+                </div>
+              </div>
+            </div>
+          </section>
+
+          {/* ── Meta Ads API ───────────────────── */}
+          <section className="settings-section glass-panel">
+            <h2 className="section-title"><Database size={18} /> Meta Ads API</h2>
+            <div className="section-body">
+              <div className="form-row">
+                <div className="form-group">
+                  <label htmlFor="metaAdAccountId">Ad Account ID</label>
+                  <input
+                    type="text"
+                    id="metaAdAccountId"
+                    name="metaAdAccountId"
+                    value={formData.metaAdAccountId}
+                    onChange={handleChange}
+                    placeholder="ej. 1258310405843013"
+                  />
+                  <span className="help-text">Lo encontrás en la URL de Ads Manager (act=...)</span>
+                </div>
+                <div className="form-group">
+                  <label htmlFor="metaAccessToken">Access Token</label>
+                  <input
+                    type="password"
+                    id="metaAccessToken"
+                    name="metaAccessToken"
+                    value={formData.metaAccessToken}
+                    onChange={handleChange}
+                    placeholder="EAA..."
+                  />
+                  <span className="help-text">Generalo en Meta Graph API Explorer con permiso ads_read</span>
                 </div>
               </div>
             </div>

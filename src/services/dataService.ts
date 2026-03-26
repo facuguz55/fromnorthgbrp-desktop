@@ -2,6 +2,8 @@ export interface DashboardSettings {
   tiendanubeToken: string;
   tiendanubeStoreId: string;
   googleSheetsUrl: string;
+  metaAccessToken: string;
+  metaAdAccountId: string;
   displayName: string;
   accentColor: string;
   compactMode: boolean;

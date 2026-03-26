@@ -8,6 +8,13 @@ export interface TNProduct {
   sku: string | null;
 }
 
+export interface TNOrderCoupon {
+  id: number;
+  code: string;
+  type: 'percentage' | 'absolute' | 'shipping';
+  value: string | number;
+}
+
 export interface TNOrder {
   id: number;
   number: number;
@@ -21,6 +28,7 @@ export interface TNOrder {
   customer: { id: number; name: string; email: string } | null;
   products: TNProduct[];
   payment_details: { method: string; credit_card_company?: string } | null;
+  coupon: TNOrderCoupon[] | null;
 }
 
 export interface TopProducto {
@@ -418,6 +426,53 @@ export async function fetchTNCustomerOrders(
     if (!hasMore) break;
   }
   return all.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+}
+
+export interface FNCouponConversion {
+  orderId: number;
+  orderNumber: number;
+  couponCode: string;
+  total: number;
+  createdAt: string;
+  customerName: string;
+  customerEmail: string;
+}
+
+/** Obtiene todas las órdenes pagadas que usaron cupones que empiezan con "FN" */
+export async function fetchFNCouponOrders(
+  storeId: string,
+  token: string,
+): Promise<FNCouponConversion[]> {
+  const all: TNOrder[] = [];
+
+  for (let page = 1; page <= 20; page++) {
+    const { data, hasMore } = await tnFetch(storeId, token, 'orders', {
+      payment_status: 'paid',
+      per_page: '200',
+      page: String(page),
+    });
+    all.push(...(data as TNOrder[]));
+    if (!hasMore) break;
+  }
+
+  const result: FNCouponConversion[] = [];
+
+  for (const order of all) {
+    if (!order.coupon || order.coupon.length === 0) continue;
+    const fnCoupon = order.coupon.find(c => c.code.toUpperCase().startsWith('FN'));
+    if (!fnCoupon) continue;
+    result.push({
+      orderId:       order.id,
+      orderNumber:   order.number,
+      couponCode:    fnCoupon.code,
+      total:         parseFloat(order.total),
+      createdAt:     order.created_at,
+      customerName:  order.customer?.name  ?? '—',
+      customerEmail: order.customer?.email ?? '—',
+    });
+  }
+
+  return result.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
 }
 
 export async function fetchTNCategories(storeId: string, token: string): Promise<TNCategory[]> {

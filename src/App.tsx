@@ -13,6 +13,7 @@ import SheetViewer from './pages/SheetViewer';
 import Ventas from './pages/Ventas';
 import Mails from './pages/Mails';
 import Tienda from './pages/Tienda';
+import Meta from './pages/Meta';
 import { getSettings } from './services/dataService';
 import './App.css';
 
@@ -54,6 +55,7 @@ function App() {
             <Route path="/cupones" element={<Navigate to="/tienda" replace />} />
             <Route path="/clientes" element={<Navigate to="/tienda" replace />} />
             <Route path="/tienda" element={<Tienda />} />
+            <Route path="/meta" element={<Meta />} />
             <Route path="/settings" element={<Settings />} />
             <Route path="*" element={<Navigate to="/dashboard" replace />} />
           </Routes>
