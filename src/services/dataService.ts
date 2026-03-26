@@ -29,11 +29,23 @@ const DEFAULT_SETTINGS: DashboardSettings = {
   sidebarCollapsed:  false,
 };
 
+// Campos que son credenciales del sistema — nunca se sobreescriben desde localStorage
+const CREDENTIAL_KEYS: (keyof DashboardSettings)[] = [
+  'tiendanubeToken',
+  'tiendanubeStoreId',
+  'googleSheetsUrl',
+  'metaAccessToken',
+  'metaAdAccountId',
+];
+
 export function getSettings(): DashboardSettings {
   const saved = localStorage.getItem('nova_dashboard_settings');
   if (!saved) return { ...DEFAULT_SETTINGS };
   try {
-    return { ...DEFAULT_SETTINGS, ...JSON.parse(saved) };
+    const parsed = JSON.parse(saved);
+    // Eliminar credenciales del objeto guardado para que siempre usen los defaults
+    for (const key of CREDENTIAL_KEYS) delete parsed[key];
+    return { ...DEFAULT_SETTINGS, ...parsed };
   } catch {
     return { ...DEFAULT_SETTINGS };
   }

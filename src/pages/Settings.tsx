@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Save, User, Palette, Database, Globe, LogOut } from 'lucide-react';
+import { Save, User, Palette, Globe, LogOut } from 'lucide-react';
 import type { DashboardSettings } from '../services/dataService';
 import { DEFAULT_SETTINGS } from '../services/dataService';
 import { useAuth } from '../context/AuthContext';
@@ -187,91 +187,6 @@ export default function Settings() {
                     <option value="en">English</option>
                     <option value="pt">Português</option>
                   </select>
-                </div>
-              </div>
-            </div>
-          </section>
-
-          {/* ── Google Sheets ──────────────────── */}
-          <section className="settings-section glass-panel">
-            <h2 className="section-title"><Database size={18} /> Google Sheets</h2>
-            <div className="section-body">
-              <div className="form-row">
-                <div className="form-group">
-                  <label htmlFor="googleSheetsUrl">URL del Google Sheet</label>
-                  <input
-                    type="text"
-                    id="googleSheetsUrl"
-                    name="googleSheetsUrl"
-                    value={formData.googleSheetsUrl}
-                    onChange={handleChange}
-                    placeholder="https://docs.google.com/spreadsheets/d/..."
-                  />
-                  <span className="help-text">Usado para Clicks de seguimiento y Seguimientos convertidos</span>
-                </div>
-              </div>
-            </div>
-          </section>
-
-          {/* ── Meta Ads API ───────────────────── */}
-          <section className="settings-section glass-panel">
-            <h2 className="section-title"><Database size={18} /> Meta Ads API</h2>
-            <div className="section-body">
-              <div className="form-row">
-                <div className="form-group">
-                  <label htmlFor="metaAdAccountId">Ad Account ID</label>
-                  <input
-                    type="text"
-                    id="metaAdAccountId"
-                    name="metaAdAccountId"
-                    value={formData.metaAdAccountId}
-                    onChange={handleChange}
-                    placeholder="ej. 1258310405843013"
-                  />
-                  <span className="help-text">Lo encontrás en la URL de Ads Manager (act=...)</span>
-                </div>
-                <div className="form-group">
-                  <label htmlFor="metaAccessToken">Access Token</label>
-                  <input
-                    type="password"
-                    id="metaAccessToken"
-                    name="metaAccessToken"
-                    value={formData.metaAccessToken}
-                    onChange={handleChange}
-                    placeholder="EAA..."
-                  />
-                  <span className="help-text">Generalo en Meta Graph API Explorer con permiso ads_read</span>
-                </div>
-              </div>
-            </div>
-          </section>
-
-          {/* ── Tiendanube API ─────────────────── */}
-          <section className="settings-section glass-panel">
-            <h2 className="section-title"><Database size={18} /> Tiendanube API</h2>
-            <div className="section-body">
-              <div className="form-row">
-                <div className="form-group">
-                  <label htmlFor="tiendanubeStoreId">Store ID</label>
-                  <input
-                    type="text"
-                    id="tiendanubeStoreId"
-                    name="tiendanubeStoreId"
-                    value={formData.tiendanubeStoreId}
-                    onChange={handleChange}
-                    placeholder="ej. 123456"
-                  />
-                </div>
-                <div className="form-group">
-                  <label htmlFor="tiendanubeToken">Access Token</label>
-                  <input
-                    type="password"
-                    id="tiendanubeToken"
-                    name="tiendanubeToken"
-                    value={formData.tiendanubeToken}
-                    onChange={handleChange}
-                    placeholder="Bearer token"
-                  />
                 </div>
               </div>
             </div>
