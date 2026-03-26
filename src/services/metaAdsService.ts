@@ -61,8 +61,6 @@ async function metaGet<T>(path: string, token: string, params: Record<string, st
   return json as T;
 }
 
-const ALL_STATUSES = ['ACTIVE', 'PAUSED', 'ARCHIVED'].join(',');
-
 // ── Campaigns ──────────────────────────────────────────────────────────────────
 
 export async function fetchMetaCampaigns(token: string, accountId: string): Promise<MetaCampaign[]> {

@@ -10,7 +10,7 @@ import {
   generateMetaAlerts,
   computeMetaSummary,
 } from '../services/metaAdsService';
-import type { MetaCampaign, MetaInsight, MetaAlert, DatePreset } from '../services/metaAdsService';
+import type { MetaCampaign, MetaInsight, DatePreset } from '../services/metaAdsService';
 import MetricCard from '../components/MetricCard';
 import './Meta.css';
 
