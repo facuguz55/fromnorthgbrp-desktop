@@ -29,7 +29,7 @@ const fmtARS = (n: number) => `$${n.toLocaleString('es-AR', { minimumFractionDig
 const fmtNum = (n: number) => n.toLocaleString('es-AR');
 const fmtPct = (n: number) => `${n.toFixed(2)}%`;
 
-type SortKey = 'name' | 'status' | 'spend' | 'impressions' | 'clicks' | 'ctr' | 'reach' | 'frequency';
+type SortKey = 'name' | 'status' | 'spend' | 'impressions' | 'clicks' | 'ctr' | 'reach' | 'frequency' | 'roas' | 'cpa';
 type SortDir = 'asc' | 'desc';
 type StatusFilter = 'ALL' | 'ACTIVE' | 'PAUSED' | 'ARCHIVED';
 type CtrFilter = 'ALL' | 'good' | 'ok' | 'low' | 'none';
@@ -179,6 +179,14 @@ export default function Meta() {
       else if (sortKey === 'ctr')    { va = a.insight?.ctr          ?? -1; vb = b.insight?.ctr         ?? -1; }
       else if (sortKey === 'reach')  { va = a.insight?.reach        ?? -1; vb = b.insight?.reach       ?? -1; }
       else if (sortKey === 'frequency') { va = a.insight?.frequency ?? -1; vb = b.insight?.frequency   ?? -1; }
+      else if (sortKey === 'roas') {
+        va = a.insight && a.insight.spend > 0 ? a.insight.purchaseValue / a.insight.spend : -1;
+        vb = b.insight && b.insight.spend > 0 ? b.insight.purchaseValue / b.insight.spend : -1;
+      }
+      else if (sortKey === 'cpa') {
+        va = a.insight && a.insight.purchases > 0 ? a.insight.spend / a.insight.purchases : -1;
+        vb = b.insight && b.insight.purchases > 0 ? b.insight.spend / b.insight.purchases : -1;
+      }
 
       if (typeof va === 'string' && typeof vb === 'string') {
         return sortDir === 'asc' ? va.localeCompare(vb) : vb.localeCompare(va);
@@ -256,6 +264,8 @@ export default function Meta() {
             <MetricCard title="Clics"          value={fmtNum(summary.totalClicks)}        icon={<MousePointerClick size={20} />} subtitle="clics totales en el período" />
             <MetricCard title="CTR promedio"   value={fmtPct(summary.avgCtr)}             icon={<TrendingUp size={20} />}        subtitle={summary.avgCtr >= 1 ? 'Buen rendimiento' : summary.avgCtr >= 0.5 ? 'Mejorable' : 'Bajo — revisá creativos'} />
             <MetricCard title="Alcance"        value={fmtNum(summary.totalReach)}         icon={<Users size={20} />}             subtitle="personas únicas alcanzadas" />
+            <MetricCard title="ROAS"           value={summary.overallRoas > 0 ? `${summary.overallRoas.toFixed(2)}x` : '—'}   icon={<TrendingUp size={20} />}        subtitle={summary.overallRoas >= 3 ? 'Excelente' : summary.overallRoas >= 2 ? 'Bueno' : summary.overallRoas > 0 ? 'Bajo — revisá campañas' : 'Sin datos de conversión'} />
+            <MetricCard title="CPA"            value={summary.avgCpa > 0 ? fmtARS(summary.avgCpa) : '—'}                      icon={<DollarSign size={20} />}        subtitle={summary.totalPurchases > 0 ? `${summary.totalPurchases} compras totales` : 'Sin conversiones registradas'} />
           </div>
 
           {/* ── Alertas ── */}
@@ -433,6 +443,8 @@ export default function Meta() {
                         { key: 'impressions', label: 'Impresiones' },
                         { key: 'clicks',      label: 'Clics' },
                         { key: 'ctr',         label: 'CTR' },
+                        { key: 'roas',        label: 'ROAS' },
+                        { key: 'cpa',         label: 'CPA' },
                         { key: 'reach',       label: 'Alcance' },
                         { key: 'frequency',   label: 'Frec.' },
                       ] as { key: SortKey; label: string }[]).map(col => (
@@ -462,6 +474,12 @@ export default function Meta() {
                           <td className="tn-td-num">{ins ? fmtNum(ins.impressions) : '—'}</td>
                           <td className="tn-td-num">{ins ? fmtNum(ins.clicks) : '—'}</td>
                           <td className={`meta-td-ctr ${ctrClass}`}>{ins ? fmtPct(ins.ctr) : '—'}</td>
+                          <td className={`meta-td-roas ${ins && ins.spend > 0 ? (ins.purchaseValue / ins.spend >= 3 ? 'meta-roas-ok' : ins.purchaseValue / ins.spend >= 2 ? 'meta-roas-warn' : ins.purchases > 0 ? 'meta-roas-bad' : '') : ''}`}>
+                            {ins && ins.purchases > 0 ? `${(ins.purchaseValue / ins.spend).toFixed(2)}x` : '—'}
+                          </td>
+                          <td className="tn-td-total">
+                            {ins && ins.purchases > 0 ? fmtARS(ins.spend / ins.purchases) : '—'}
+                          </td>
                           <td className="tn-td-num">{ins ? fmtNum(ins.reach) : '—'}</td>
                           <td className={`meta-td-freq ${ins && ins.frequency > 4 ? 'meta-freq-high' : ''}`}>
                             {ins ? ins.frequency.toFixed(1) : '—'}

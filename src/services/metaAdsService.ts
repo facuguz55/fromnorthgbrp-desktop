@@ -29,6 +29,8 @@ export interface MetaInsight {
   spend: number;
   reach: number;
   frequency: number;
+  purchases: number;
+  purchaseValue: number;
   date_start: string;
   date_stop: string;
 }
@@ -45,7 +47,7 @@ export interface MetaAlert {
   level: 'campaign' | 'ad';
   id: string;
   name: string;
-  type: 'low_ctr' | 'very_low_ctr' | 'high_frequency' | 'no_impressions' | 'high_spend_no_clicks';
+  type: 'low_ctr' | 'very_low_ctr' | 'high_frequency' | 'no_impressions' | 'high_spend_no_clicks' | 'low_roas';
   message: string;
   severity: 'warning' | 'critical';
   value: number;
@@ -59,6 +61,10 @@ async function metaGet<T>(path: string, token: string, params: Record<string, st
   const json = await res.json();
   if (json.error) throw new Error(`Meta API: ${json.error.message} (code ${json.error.code})`);
   return json as T;
+}
+
+function extractAction(actions: { action_type: string; value: string }[] | undefined, type: string): number {
+  return parseFloat(actions?.find(a => a.action_type === type)?.value ?? '0') || 0;
 }
 
 // ── Campaigns ──────────────────────────────────────────────────────────────────
@@ -79,6 +85,25 @@ export async function fetchMetaCampaigns(token: string, accountId: string): Prom
 
 // ── Insights ───────────────────────────────────────────────────────────────────
 
+interface RawInsight {
+  campaign_id?: string;
+  campaign_name?: string;
+  adset_id?: string;
+  adset_name?: string;
+  ad_id?: string;
+  ad_name?: string;
+  impressions?: string;
+  clicks?: string;
+  ctr?: string;
+  spend?: string;
+  reach?: string;
+  frequency?: string;
+  date_start?: string;
+  date_stop?: string;
+  actions?: { action_type: string; value: string }[];
+  action_values?: { action_type: string; value: string }[];
+}
+
 export async function fetchMetaInsights(
   token: string,
   accountId: string,
@@ -86,11 +111,11 @@ export async function fetchMetaInsights(
   level: 'campaign' | 'adset' | 'ad' = 'campaign',
 ): Promise<MetaInsight[]> {
   const accountFmt = accountId.startsWith('act_') ? accountId : `act_${accountId}`;
-  const result = await metaGet<{ data: Record<string, string>[] }>(
+  const result = await metaGet<{ data: RawInsight[] }>(
     `/${accountFmt}/insights`,
     token,
     {
-      fields: 'campaign_id,campaign_name,adset_id,adset_name,ad_id,ad_name,impressions,clicks,ctr,spend,reach,frequency',
+      fields: 'campaign_id,campaign_name,adset_id,adset_name,ad_id,ad_name,impressions,clicks,ctr,spend,reach,frequency,actions,action_values',
       date_preset: datePreset,
       level,
       effective_status: `["ACTIVE","PAUSED","ARCHIVED"]`,
@@ -105,12 +130,14 @@ export async function fetchMetaInsights(
     adset_name:    r.adset_name,
     ad_id:         r.ad_id,
     ad_name:       r.ad_name,
-    impressions:   parseInt(r.impressions ?? '0') || 0,
-    clicks:        parseInt(r.clicks      ?? '0') || 0,
-    ctr:           parseFloat(r.ctr       ?? '0') || 0,
-    spend:         parseFloat(r.spend     ?? '0') || 0,
-    reach:         parseInt(r.reach       ?? '0') || 0,
-    frequency:     parseFloat(r.frequency ?? '0') || 0,
+    impressions:   parseInt(r.impressions  ?? '0') || 0,
+    clicks:        parseInt(r.clicks       ?? '0') || 0,
+    ctr:           parseFloat(r.ctr        ?? '0') || 0,
+    spend:         parseFloat(r.spend      ?? '0') || 0,
+    reach:         parseInt(r.reach        ?? '0') || 0,
+    frequency:     parseFloat(r.frequency  ?? '0') || 0,
+    purchases:     extractAction(r.actions,       'purchase'),
+    purchaseValue: extractAction(r.action_values, 'purchase'),
     date_start:    r.date_start ?? '',
     date_stop:     r.date_stop  ?? '',
   }));
@@ -191,9 +218,30 @@ export function generateMetaAlerts(insights: MetaInsight[], level: 'campaign' | 
         value: ins.spend,
       });
     }
+
+    // ROAS bajo: solo si hubo gasto significativo y hay datos de conversión
+    if (ins.spend > 10 && ins.purchases > 0) {
+      const roas = ins.purchaseValue / ins.spend;
+      if (roas < 1) {
+        alerts.push({
+          level, id, name,
+          type: 'low_roas',
+          severity: 'critical',
+          message: `ROAS crítico: ${roas.toFixed(2)}x — gastás más de lo que generás`,
+          value: roas,
+        });
+      } else if (roas < 2) {
+        alerts.push({
+          level, id, name,
+          type: 'low_roas',
+          severity: 'warning',
+          message: `ROAS bajo: ${roas.toFixed(2)}x (recomendado: ≥2x)`,
+          value: roas,
+        });
+      }
+    }
   }
 
-  // Críticos primero
   return alerts.sort((a, b) => {
     if (a.severity === b.severity) return 0;
     return a.severity === 'critical' ? -1 : 1;
@@ -208,6 +256,10 @@ export interface MetaSummary {
   totalClicks: number;
   avgCtr: number;
   totalReach: number;
+  totalPurchases: number;
+  totalRevenue: number;
+  overallRoas: number;
+  avgCpa: number;
 }
 
 export function computeMetaSummary(insights: MetaInsight[]): MetaSummary {
@@ -215,6 +267,10 @@ export function computeMetaSummary(insights: MetaInsight[]): MetaSummary {
   const totalImpressions = insights.reduce((s, i) => s + i.impressions, 0);
   const totalClicks      = insights.reduce((s, i) => s + i.clicks, 0);
   const totalReach       = insights.reduce((s, i) => s + i.reach, 0);
-  const avgCtr = totalImpressions > 0 ? (totalClicks / totalImpressions) * 100 : 0;
-  return { totalSpend, totalImpressions, totalClicks, avgCtr, totalReach };
+  const totalPurchases   = insights.reduce((s, i) => s + i.purchases, 0);
+  const totalRevenue     = insights.reduce((s, i) => s + i.purchaseValue, 0);
+  const avgCtr     = totalImpressions > 0 ? (totalClicks / totalImpressions) * 100 : 0;
+  const overallRoas = totalSpend > 0 ? totalRevenue / totalSpend : 0;
+  const avgCpa      = totalPurchases > 0 ? totalSpend / totalPurchases : 0;
+  return { totalSpend, totalImpressions, totalClicks, avgCtr, totalReach, totalPurchases, totalRevenue, overallRoas, avgCpa };
 }

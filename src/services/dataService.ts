@@ -13,17 +13,13 @@ export interface DashboardSettings {
   sidebarCollapsed: boolean;
 }
 
-// Valores pre-configurados que se aplican si el usuario no los sobrescribió
-const PRECONFIGURED: Partial<DashboardSettings> = {
-  googleSheetsUrl: 'https://docs.google.com/spreadsheets/d/1AFc5ofUSl_DwaYPC2idAY2uHv1aPWx8QhcgiPeJyeP0/edit?gid=1642608634#gid=1642608634',
-};
-
+// Credenciales pre-configuradas del sistema
 const DEFAULT_SETTINGS: DashboardSettings = {
-  tiendanubeToken:   '',
-  tiendanubeStoreId: '',
-  googleSheetsUrl:   PRECONFIGURED.googleSheetsUrl!,
-  metaAccessToken:   '',
-  metaAdAccountId:   '',
+  tiendanubeToken:   'c72fd195800f930ed64ee18c8dcf4be1ccef4607',
+  tiendanubeStoreId: '3349973',
+  googleSheetsUrl:   'https://docs.google.com/spreadsheets/d/1AFc5ofUSl_DwaYPC2idAY2uHv1aPWx8QhcgiPeJyeP0/edit?gid=1642608634#gid=1642608634',
+  metaAccessToken:   'EAASjWUjyKg8BRBvqu35F8PFG4hLS2ZBIScBCft3z7g6X0coSNJInWPx6ocFhuQSJXF57TTIf8L9glZCZBHAprikgFhOwhS8FeDxSwkRMSarWE29McGAjVPwFYPIAfcZBaBUq2bEy7uX0ZC2Dw9Pb7icxZBdm4DGMcabpz2L21U7jZBYlJM5WxXjZBYlChgZBKZApYxIgZDZD',
+  metaAdAccountId:   '1110831870748256',
   displayName:       '',
   accentColor:       '#06b6d4',
   compactMode:       false,

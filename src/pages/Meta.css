@@ -102,11 +102,12 @@
 /* ── KPI Grid ────────────────────────────────────────────── */
 .meta-kpi-grid {
   display: grid;
-  grid-template-columns: repeat(5, 1fr);
+  grid-template-columns: repeat(7, 1fr);
   gap: 1rem;
 }
 
-@media (max-width: 1100px) { .meta-kpi-grid { grid-template-columns: repeat(3, 1fr); } }
+@media (max-width: 1400px) { .meta-kpi-grid { grid-template-columns: repeat(4, 1fr); } }
+@media (max-width: 900px)  { .meta-kpi-grid { grid-template-columns: repeat(3, 1fr); } }
 @media (max-width: 640px)  { .meta-kpi-grid { grid-template-columns: repeat(2, 1fr); } }
 
 /* ── Sections ────────────────────────────────────────────── */
@@ -417,6 +418,16 @@
 
 .meta-td-freq { font-variant-numeric: tabular-nums; text-align: right; }
 .meta-freq-high { color: #f59e0b; font-weight: 700; }
+
+/* ── ROAS ────────────────────────────────────────────────── */
+.meta-td-roas {
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+.meta-roas-ok   { color: #10b981; }
+.meta-roas-warn { color: #f59e0b; }
+.meta-roas-bad  { color: #f87171; }
 
 /* ── Status dots ─────────────────────────────────────────── */
 .meta-status-dot {
