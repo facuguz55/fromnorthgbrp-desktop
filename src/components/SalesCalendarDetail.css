@@ -374,17 +374,32 @@
 
 /* ── Mobile: solo mes actual, celdas responsivas ─────── */
 @media (max-width: 768px) {
+  /* El layout completo ocupa todo el ancho */
+  .cal-detail-layout {
+    flex-direction: column;
+    width: 100%;
+  }
+
+  .cal-detail-calendars {
+    flex: 1 1 auto;
+    width: 100%;
+    align-items: center;
+  }
+
   /* Ocultar mes anterior */
   .cal-two-months .cal-month-block:first-child {
     display: none;
   }
   .cal-two-months {
     justify-content: center;
+    width: 100%;
   }
   .cal-month-block {
+    flex: 1 1 auto;
     width: 100%;
+    max-width: 100%;
     box-sizing: border-box;
-    padding: 0.75rem 0.5rem;
+    padding: 1rem 0.75rem;
   }
 
   /* Título: solo mostrar el mes actual */
@@ -397,23 +412,25 @@
   .cal-detail-title {
     min-width: auto;
     text-align: center;
+    font-size: 1.05rem;
   }
 
   /* Leyenda centrada */
   .cal-detail-legend {
     justify-content: center;
+    margin-bottom: 0.75rem;
   }
 
   /* Grid con celdas cuadradas que se adaptan al ancho */
   .cal-detail-grid {
     grid-template-columns: repeat(7, 1fr);
     width: 100%;
-    gap: 3px;
+    gap: 4px;
   }
   .cal-detail-day-label {
     width: auto;
     text-align: center;
-    font-size: 0.58rem;
+    font-size: 0.6rem;
   }
   .cal-detail-cell {
     width: auto;
@@ -421,6 +438,16 @@
     aspect-ratio: 1;
   }
   .cal-detail-num {
-    font-size: 0.6rem;
+    font-size: 0.7rem;
+  }
+
+  /* Stats debajo en fila */
+  .cal-detail-right {
+    width: 100%;
+    flex-direction: row;
+    flex-wrap: wrap;
+  }
+  .cal-stat-card {
+    flex: 1 1 140px;
   }
 }
