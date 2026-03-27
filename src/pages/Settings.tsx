@@ -162,12 +162,12 @@ export default function Settings() {
                 <div className="form-group">
                   <label htmlFor="currencySymbol">Símbolo de moneda</label>
                   <select id="currencySymbol" name="currencySymbol" value={formData.currencySymbol} onChange={handleChange}>
-                    <option value="$">$ (Dólar / Peso)</option>
-                    <option value="€">€ (Euro)</option>
-                    <option value="£">£ (Libra)</option>
-                    <option value="R$">R$ (Real)</option>
-                    <option value="CLP">CLP (Peso chileno)</option>
-                    <option value="ARS">ARS (Peso argentino)</option>
+                    <option value="$">$ — Peso argentino (ARS)</option>
+                    <option value="USD">USD — Dólar</option>
+                    <option value="€">€ — Euro</option>
+                    <option value="£">£ — Libra</option>
+                    <option value="R$">R$ — Real brasileño</option>
+                    <option value="CLP">CLP — Peso chileno</option>
                   </select>
                 </div>
                 <div className="form-group">

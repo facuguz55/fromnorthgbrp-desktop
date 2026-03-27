@@ -7,9 +7,10 @@ interface MetricCardProps {
   trend?: number;
   icon: React.ReactNode;
   subtitle?: string;
+  currency?: string;
 }
 
-export default function MetricCard({ title, value, trend, icon, subtitle }: MetricCardProps) {
+export default function MetricCard({ title, value, trend, icon, subtitle, currency }: MetricCardProps) {
   const isPositive = trend && trend > 0;
   const isNegative = trend && trend < 0;
 
@@ -20,6 +21,7 @@ export default function MetricCard({ title, value, trend, icon, subtitle }: Metr
         <div className="metric-icon">{icon}</div>
       </div>
       <div className="metric-body">
+        {currency && <span className="metric-currency">{currency}</span>}
         <div className="metric-value">{value}</div>
         {subtitle && <div className="metric-subtitle">{subtitle}</div>}
         {trend !== undefined && (
