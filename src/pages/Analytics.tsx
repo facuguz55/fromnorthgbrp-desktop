@@ -5,7 +5,7 @@ import {
 } from 'recharts';
 import {
   RefreshCw, Clock, Users, UserCheck, UserPlus,
-  TrendingUp, ShoppingCart, Package, Trophy, X, Search,
+  TrendingUp, ShoppingCart, Package, X, Search, BarChart2,
 } from 'lucide-react';
 import { getSettings } from '../services/dataService';
 import {
@@ -211,6 +211,32 @@ export default function Analytics() {
       map[key].total += parseFloat(o.total);
     }
     return Object.values(map).filter(c => c.pedidos > 1).sort((a, b) => b.pedidos - a.pedidos);
+  }, [metrics]);
+
+  // ── Análisis de productos por período ────────────────────────────────────────
+  const productosAnalisis = useMemo(() => {
+    if (!metrics) return [];
+    const TZ = 'America/Argentina/Buenos_Aires';
+    const now = Date.now();
+    const arDateStr = new Date(now).toLocaleDateString('en-CA', { timeZone: TZ });
+    const startOfToday = new Date(`${arDateStr}T00:00:00.000-03:00`).getTime();
+    const startOfWeek  = now - 7  * 24 * 60 * 60 * 1000;
+    const startOfMonth = now - 30 * 24 * 60 * 60 * 1000;
+
+    const map: Record<string, { nombre: string; hoy: number; semana: number; mes: number }> = {};
+
+    for (const o of metrics.orders) {
+      if (o.payment_status !== 'paid' && o.payment_status !== 'authorized') continue;
+      const t = new Date(o.created_at).getTime();
+      for (const p of o.products) {
+        if (!map[p.name]) map[p.name] = { nombre: p.name, hoy: 0, semana: 0, mes: 0 };
+        if (t >= startOfToday) map[p.name].hoy    += p.quantity;
+        if (t >= startOfWeek)  map[p.name].semana += p.quantity;
+        if (t >= startOfMonth) map[p.name].mes    += p.quantity;
+      }
+    }
+
+    return Object.values(map).sort((a, b) => b.mes - a.mes);
   }, [metrics]);
 
   return (
@@ -481,26 +507,6 @@ export default function Analytics() {
         )}
       </section>
 
-      {/* ══ Top productos ═══════════════════════════════════════════════════ */}
-      {metrics && metrics.topProductos.length > 0 && (
-        <section className="analytics-section">
-          <div className="section-title-row">
-            <Trophy size={18} className="section-icon" />
-            <h2>Top productos vendidos</h2>
-          </div>
-          <p className="section-desc">Por cantidad de unidades en órdenes pagadas (últimos 90 días).</p>
-          <div className="tn-productos-grid glass-panel">
-            {metrics.topProductos.map((p, i) => (
-              <div key={p.nombre} className="tn-producto-row">
-                <span className="tn-producto-rank">#{i + 1}</span>
-                <span className="tn-producto-nombre">{p.nombre}</span>
-                <span className="tn-producto-cant">{fmtNum(p.cantidad)} u.</span>
-                <span className="tn-producto-total">{fmtARS(p.total)}</span>
-              </div>
-            ))}
-          </div>
-        </section>
-      )}
 
       {/* ══ Últimas órdenes ═════════════════════════════════════════════════ */}
       {metrics && metrics.orders.length > 0 && (
@@ -571,6 +577,48 @@ export default function Analytics() {
               </div>
             )}
           </div>
+        </section>
+      )}
+
+      {/* ══ Análisis de productos ════════════════════════════════════════════ */}
+      {metrics && (
+        <section className="analytics-section">
+          <div className="section-title-row">
+            <BarChart2 size={18} className="section-icon" />
+            <h2>Análisis de productos</h2>
+          </div>
+          <p className="section-desc">Rendimiento por período · unidades vendidas en órdenes pagadas.</p>
+
+          {productosAnalisis.length === 0 ? (
+            <div className="glass-panel chart-empty" style={{ padding: '2rem' }}>
+              <span>Sin datos de productos en los últimos 30 días</span>
+            </div>
+          ) : (
+            <div className="tn-table-wrapper glass-panel prod-analisis-table">
+              <table className="tn-table">
+                <thead>
+                  <tr>
+                    <th>#</th>
+                    <th>Producto</th>
+                    <th className="col-period">Hoy</th>
+                    <th className="col-period">Semana</th>
+                    <th className="col-period">Mes</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {productosAnalisis.map((p, i) => (
+                    <tr key={p.nombre}>
+                      <td className="tn-td-num">{i + 1}</td>
+                      <td className="prod-analisis-nombre">{p.nombre}</td>
+                      <td className="prod-analisis-num">{fmtNum(p.hoy)}</td>
+                      <td className="prod-analisis-num">{fmtNum(p.semana)}</td>
+                      <td className="prod-analisis-num prod-analisis-mes">{fmtNum(p.mes)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
         </section>
       )}
 
