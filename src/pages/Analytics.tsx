@@ -214,6 +214,11 @@ export default function Analytics() {
   }, [metrics]);
 
   // ── Análisis de productos por período ────────────────────────────────────────
+  // Elimina patrones de precio del nombre para unificar variantes
+  // Ej: "2 BAGGYS X $65.000 - PROMO LIMITADA" y "2 BAGGYS X $70.000 - PROMO LIMITADA" → mismo grupo
+  const normalizarProducto = (nombre: string) =>
+    nombre.replace(/\$[\d.,]+/g, '').replace(/\s{2,}/g, ' ').trim();
+
   const productosAnalisis = useMemo(() => {
     if (!metrics) return [];
     const TZ = 'America/Argentina/Buenos_Aires';
@@ -229,10 +234,11 @@ export default function Analytics() {
       if (o.payment_status !== 'paid' && o.payment_status !== 'authorized') continue;
       const t = new Date(o.created_at).getTime();
       for (const p of o.products) {
-        if (!map[p.name]) map[p.name] = { nombre: p.name, hoy: 0, semana: 0, mes: 0 };
-        if (t >= startOfToday) map[p.name].hoy    += p.quantity;
-        if (t >= startOfWeek)  map[p.name].semana += p.quantity;
-        if (t >= startOfMonth) map[p.name].mes    += p.quantity;
+        const key = normalizarProducto(p.name);
+        if (!map[key]) map[key] = { nombre: key, hoy: 0, semana: 0, mes: 0 };
+        if (t >= startOfToday) map[key].hoy    += p.quantity;
+        if (t >= startOfWeek)  map[key].semana += p.quantity;
+        if (t >= startOfMonth) map[key].mes    += p.quantity;
       }
     }
 
