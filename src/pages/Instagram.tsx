@@ -4,7 +4,7 @@ import {
   CartesianGrid, Tooltip, ResponsiveContainer, Legend,
 } from 'recharts';
 import {
-  Instagram, RefreshCw, Heart, MessageCircle, Bookmark,
+  Instagram as InstagramIcon, RefreshCw, Heart, MessageCircle, Bookmark,
   Eye, Play, Film, Users, TrendingUp, Globe, MapPin,
   Image, Layers, LayoutGrid,
 } from 'lucide-react';
@@ -242,7 +242,7 @@ export default function Instagram() {
       <div className="ig-page">
         <div className="ig-header">
           <div>
-            <h1 className="ig-title"><Instagram size={22} className="ig-title-icon" /> Instagram Analytics</h1>
+            <h1 className="ig-title"><InstagramIcon size={22} className="ig-title-icon" /> Instagram Analytics</h1>
           </div>
         </div>
         <div className="ig-error glass-panel">
@@ -259,7 +259,7 @@ export default function Instagram() {
       <div className="ig-header">
         <div>
           <h1 className="ig-title">
-            <Instagram size={22} className="ig-title-icon" />
+            <InstagramIcon size={22} className="ig-title-icon" />
             Instagram Analytics
           </h1>
           {data?.profile && (
@@ -286,7 +286,7 @@ export default function Instagram() {
             <div className="ig-profile-avatar-wrap">
               {data.profile.profile_picture_url
                 ? <img className="ig-profile-avatar" src={data.profile.profile_picture_url} alt={data.profile.username} />
-                : <div className="ig-profile-avatar-placeholder"><Instagram size={28} /></div>
+                : <div className="ig-profile-avatar-placeholder"><InstagramIcon size={28} /></div>
               }
             </div>
             <div className="ig-profile-info">
@@ -357,7 +357,7 @@ export default function Instagram() {
               <MetricCard
                 title="Visitas al perfil (30d)"
                 value={fmtNum(kpis.totalProfileViews)}
-                icon={<Instagram size={18} />}
+                icon={<InstagramIcon size={18} />}
                 subtitle="visitas a tu perfil"
               />
             </div>
