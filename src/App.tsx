@@ -1,4 +1,4 @@
-import { useEffect, type ReactNode } from 'react';
+import { useEffect, useRef, type ReactNode } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import Sidebar from './components/Sidebar';
@@ -16,8 +16,63 @@ import Mails from './pages/Mails';
 import Tienda from './pages/Tienda';
 import Meta from './pages/Meta';
 import Login from './pages/Login';
-import { getSettings } from './services/dataService';
+import { getSettings, META_ACCOUNTS } from './services/dataService';
+import { fetchMetaInsights, generateMetaAlerts } from './services/metaAdsService';
 import './App.css';
+
+// ── Background poller: chequea alertas críticas de Meta Ads cada 15 min ───────
+const POLL_MS = 15 * 60 * 1000;
+
+function useMetaAlertPoller() {
+  const prevKeys   = useRef(new Set<string>());
+  const isBaseline = useRef(true);
+
+  useEffect(() => {
+    const poll = async () => {
+      const settings = getSettings();
+      const token    = settings.metaAccessToken.trim();
+      if (!token) return;
+
+      for (const acct of META_ACCOUNTS) {
+        const accountId = (settings[acct.settingsKey] as string).trim();
+        if (!accountId) continue;
+        try {
+          const insights  = await fetchMetaInsights(token, accountId, 'last_7d', 'campaign');
+          const criticals = generateMetaAlerts(insights, 'campaign')
+            .filter(a => a.severity === 'critical');
+          const currKeys  = new Set(criticals.map(a => `${acct.key}:${a.id}:${a.type}`));
+
+          if (!isBaseline.current
+            && typeof Notification !== 'undefined'
+            && Notification.permission === 'granted') {
+            const fresh = criticals.filter(
+              a => !prevKeys.current.has(`${acct.key}:${a.id}:${a.type}`),
+            );
+            if (fresh.length > 0) {
+              const top = fresh[0];
+              new Notification(`⚠️ Meta Ads · ${acct.label} — nueva alerta crítica`, {
+                body: `${top.name}: ${top.message}`
+                  + (fresh.length > 1 ? `\n+${fresh.length - 1} más` : ''),
+              });
+            }
+          }
+
+          // Reemplaza keys de esta cuenta con las actuales
+          for (const k of prevKeys.current) {
+            if (k.startsWith(`${acct.key}:`)) prevKeys.current.delete(k);
+          }
+          currKeys.forEach(k => prevKeys.current.add(k));
+        } catch { /* fallo silencioso */ }
+      }
+
+      isBaseline.current = false;
+    };
+
+    poll();                                    // baseline inmediato (sin notificar)
+    const timer = setInterval(poll, POLL_MS);  // luego cada 15 min
+    return () => clearInterval(timer);
+  }, []);
+}
 
 function ThemeApplier() {
   useEffect(() => {
@@ -44,6 +99,7 @@ function ProtectedRoute({ children }: { children: ReactNode }) {
 
 function AppShell() {
   const { user, isLoading } = useAuth();
+  useMetaAlertPoller();
 
   if (isLoading) {
     return (
