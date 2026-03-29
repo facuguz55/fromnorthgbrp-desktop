@@ -73,30 +73,6 @@
   flex-wrap: wrap;
 }
 
-/* ── Botón temporal de prueba de notificaciones ─────────── */
-.meta-notif-test-btn {
-  display: flex;
-  align-items: center;
-  gap: 0.35rem;
-  padding: 0.28rem 0.7rem;
-  border-radius: var(--radius-md);
-  border: 1px dashed #f59e0b;
-  background: rgba(245, 158, 11, 0.08);
-  color: #f59e0b;
-  font-size: 0.72rem;
-  font-weight: 600;
-  cursor: pointer;
-  font-family: inherit;
-  transition: background 0.15s;
-  white-space: nowrap;
-}
-.meta-notif-test-btn:hover:not(:disabled) {
-  background: rgba(245, 158, 11, 0.16);
-}
-.meta-notif-test-btn.counting {
-  opacity: 0.75;
-  cursor: default;
-}
 
 /* ── Toast in-app ────────────────────────────────────────────────────────── */
 .meta-toast-stack {
@@ -210,13 +186,6 @@
   .meta-toast { width: 100%; }
 }
 
-.meta-notif-blocked {
-  font-size: 0.72rem;
-  color: #ef4444;
-  display: flex;
-  align-items: center;
-  gap: 0.35rem;
-}
 
 /* ── Date selector ───────────────────────────────────────── */
 .meta-date-btns {

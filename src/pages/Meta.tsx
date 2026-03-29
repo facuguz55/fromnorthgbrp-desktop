@@ -94,32 +94,6 @@ function ToastStack({ toasts, onDismiss }: { toasts: ToastItem[]; onDismiss: (id
   );
 }
 
-function TestNotifButton({ onFire }: { onFire: () => void }) {
-  const [countdown, setCountdown] = useState<number | null>(null);
-
-  const handleClick = () => {
-    if (countdown !== null) return;
-    setCountdown(3);
-    let t = 3;
-    const iv = setInterval(() => {
-      t--;
-      if (t > 0) { setCountdown(t); return; }
-      clearInterval(iv);
-      setCountdown(null);
-      onFire();
-    }, 1000);
-  };
-
-  return (
-    <button
-      className={`meta-notif-test-btn ${countdown !== null ? 'counting' : ''}`}
-      onClick={handleClick}
-      disabled={countdown !== null}
-    >
-      🔔 {countdown !== null ? `Enviando en ${countdown}s…` : 'Test notif'}
-    </button>
-  );
-}
 
 export default function Meta() {
   const [campaigns,   setCampaigns]   = useState<MetaCampaign[]>([]);
@@ -390,15 +364,6 @@ export default function Meta() {
               </button>
             ))}
           </div>
-          {/* ── BOTÓN TEMPORAL DE PRUEBA ── */}
-          <TestNotifButton onFire={() => sendNotifications(
-            alerts.length > 0 ? alerts : [{
-              level: 'campaign' as const, id: 'test', name: 'Campaña Verano 2025',
-              type: 'low_roas' as const, severity: 'critical' as const,
-              message: 'ROAS crítico: 0.8x — gastás más de lo que generás',
-              value: 0.8,
-            }],
-          )} />
           <button className="btn-secondary refresh-btn" onClick={() => loadData(datePreset, activeAccountKey, true)} disabled={loading}>
             <RefreshCw size={15} className={loading ? 'spinning' : ''} />
             {loading ? 'Cargando...' : 'Actualizar'}
