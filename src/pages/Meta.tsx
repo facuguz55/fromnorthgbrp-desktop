@@ -338,7 +338,13 @@ export default function Meta() {
                         ? <AlertCircle size={18} className="meta-alert-icon critical" />
                         : <AlertTriangle size={18} className="meta-alert-icon warning" />}
                       <div>
-                        <p className="meta-alert-name">{alert.name}</p>
+                        <p className="meta-alert-name">
+                          {alert.name}
+                          {(() => {
+                            const status = campaigns.find(c => c.id === alert.id)?.status;
+                            return status ? <StatusDot status={status} /> : null;
+                          })()}
+                        </p>
                         <p className="meta-alert-msg">{alert.message}</p>
                       </div>
                     </div>

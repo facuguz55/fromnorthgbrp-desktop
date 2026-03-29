@@ -228,13 +228,14 @@
 .meta-alert-icon.warning  { color: #f59e0b; flex-shrink: 0; margin-top: 0.1rem; }
 
 .meta-alert-name {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
   font-size: 0.85rem;
   font-weight: 700;
   color: var(--text-primary);
   margin: 0 0 0.15rem;
-  white-space: nowrap;
   overflow: hidden;
-  text-overflow: ellipsis;
 }
 
 .meta-alert-msg {
