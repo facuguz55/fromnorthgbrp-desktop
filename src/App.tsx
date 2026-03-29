@@ -15,6 +15,7 @@ import Ventas from './pages/Ventas';
 import Mails from './pages/Mails';
 import Tienda from './pages/Tienda';
 import Meta from './pages/Meta';
+import Instagram from './pages/Instagram';
 import Login from './pages/Login';
 import { getSettings, META_ACCOUNTS } from './services/dataService';
 import { fetchMetaInsights, generateMetaAlerts } from './services/metaAdsService';
@@ -142,6 +143,7 @@ function AppShell() {
           <Route path="/cupones"   element={<Navigate to="/tienda" replace />} />
           <Route path="/clientes"  element={<Navigate to="/tienda" replace />} />
           <Route path="/tienda"    element={<ProtectedRoute><Tienda /></ProtectedRoute>} />
+          <Route path="/instagram" element={<ProtectedRoute><Instagram /></ProtectedRoute>} />
           <Route path="/meta"      element={<ProtectedRoute><Meta /></ProtectedRoute>} />
           <Route path="/settings"  element={<ProtectedRoute><Settings /></ProtectedRoute>} />
           <Route path="*"          element={<Navigate to="/dashboard" replace />} />
