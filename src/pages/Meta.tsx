@@ -62,9 +62,29 @@ type CampaignRow = MetaCampaign & { insight: MetaInsight | null };
 
 function TestNotifButton({ onFire }: { onFire: () => void }) {
   const [countdown, setCountdown] = useState<number | null>(null);
+  const [status, setStatus] = useState<'idle' | 'blocked'>('idle');
 
-  const handleClick = () => {
+  const handleClick = async () => {
     if (countdown !== null) return;
+
+    if (typeof Notification === 'undefined') {
+      setStatus('blocked');
+      return;
+    }
+
+    let permission = Notification.permission;
+    if (permission === 'default') {
+      permission = await Notification.requestPermission();
+    }
+
+    console.log('[TestNotif] permission:', permission);
+
+    if (permission !== 'granted') {
+      setStatus('blocked');
+      return;
+    }
+
+    setStatus('idle');
     setCountdown(3);
     let t = 3;
     const iv = setInterval(() => {
@@ -78,6 +98,14 @@ function TestNotifButton({ onFire }: { onFire: () => void }) {
       }
     }, 1000);
   };
+
+  if (status === 'blocked') {
+    return (
+      <span className="meta-notif-blocked">
+        🔕 Notificaciones bloqueadas — habilitálas en la config del navegador
+      </span>
+    );
+  }
 
   return (
     <button
@@ -271,6 +299,7 @@ export default function Meta() {
   }, []);
 
   const sendNotifications = (alertList: MetaAlert[], acctKey: MetaAccountKey = activeAccountKey) => {
+    console.log('[sendNotifications] permission:', typeof Notification !== 'undefined' ? Notification.permission : 'unsupported', '| alerts:', alertList.length);
     if (typeof Notification === 'undefined' || Notification.permission !== 'granted') return;
     if (alertList.length === 0) return;
 
@@ -286,7 +315,12 @@ export default function Meta() {
     const body = `${top.name}: ${top.message}`
       + (alertList.length > 1 ? `\n+${alertList.length - 1} alerta${alertList.length - 1 !== 1 ? 's' : ''} más` : '');
 
-    new Notification(title, { body, icon: '/favicon.ico' });
+    try {
+      new Notification(title, { body, icon: '/favicon.ico' });
+      console.log('[sendNotifications] enviada:', title);
+    } catch (e) {
+      console.error('[sendNotifications] error:', e);
+    }
   };
 
   // Auto-notificar en cada recarga (no en la primera carga inicial)
