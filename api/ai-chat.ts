@@ -575,6 +575,12 @@ export default async function handler(req: Request): Promise<Response> {
   });
 
   return new Response(stream, {
-    headers: { ...CORS, 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-cache' },
+    headers: {
+      ...CORS,
+      'Content-Type': 'text/event-stream',
+      'Cache-Control': 'no-cache, no-transform',
+      'X-Accel-Buffering': 'no',
+      'Transfer-Encoding': 'chunked',
+    },
   });
 }
