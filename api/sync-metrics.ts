@@ -39,6 +39,8 @@ export default async function handler(req: Request): Promise<Response> {
   };
   if (req.method === 'OPTIONS') return new Response(null, { headers: CORS });
 
+  try {
+
   const url = new URL(req.url);
   const full = url.searchParams.get('full') === '1';
 
@@ -98,6 +100,12 @@ export default async function handler(req: Request): Promise<Response> {
   return new Response(JSON.stringify({ ok: true, mode: 'incremental', new: newOrders.length, total: merged.length }), {
     headers: { ...CORS, 'Content-Type': 'application/json' },
   });
+
+  } catch (err: any) {
+    return new Response(JSON.stringify({ error: String(err?.message ?? err) }), {
+      status: 500, headers: { ...CORS, 'Content-Type': 'application/json' },
+    });
+  }
 }
 
 async function saveToSupabase(orders: any[]): Promise<void> {
