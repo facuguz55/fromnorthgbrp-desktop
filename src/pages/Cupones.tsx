@@ -79,21 +79,29 @@ function normalizeCupones(raw: unknown): Cupon[] {
 }
 
 // ── Fetch todos los cupones paginando via proxy ───────────────────────────────
+// TiendaNube usa since_id para paginar: cada request trae hasta 30 ítems
+// con ID > since_id. Se repite hasta recibir una página vacía.
 
 async function fetchAllCupones(storeId: string, token: string): Promise<Cupon[]> {
   const all: Cupon[] = [];
-  for (let page = 1; page <= 20; page++) {
-    // Usamos siempre el proxy Vercel — el browser no puede llamar directo a TN
-    // con el header Authentication (CORS lo bloquea).
-    // TiendaNube limita a 30 ítems por página independientemente del per_page.
-    const qs = new URLSearchParams({ storeId, token, path: 'coupons', per_page: '30', page: String(page) });
-    const res = await fetch(`/api/tiendanube?${qs}`);
+  let sinceId = 0;
+
+  for (let guard = 0; guard < 50; guard++) {
+    const params: Record<string, string> = {
+      storeId, token, path: 'coupons', per_page: '30',
+    };
+    if (sinceId > 0) params.since_id = String(sinceId);
+
+    const res = await fetch(`/api/tiendanube?${new URLSearchParams(params)}`);
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
+
     const data = await res.json() as Cupon[];
-    if (data.length === 0) break;   // página vacía = no hay más
+    if (!data.length) break;                          // sin más resultados
+
     all.push(...data);
-    if (data.length < 30) break;    // página incompleta = última página
+    sinceId = Number(data[data.length - 1].id);       // avanzar cursor
   }
+
   return all;
 }
 
