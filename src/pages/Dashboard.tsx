@@ -76,6 +76,12 @@ export default function Dashboard() {
     return () => clearInterval(id);
   }, []);
 
+  // Auto-refresh cada 15 minutos para mantener Supabase actualizado
+  useEffect(() => {
+    const id = setInterval(() => fetchData(true), 15 * 60 * 1000);
+    return () => clearInterval(id);
+  }, []);
+
   const fetchData = async (force = false) => {
     const hasCached = !!getPersistedMetrics() && !force;
     if (hasCached) setSyncing(true); else setLoading(true);
