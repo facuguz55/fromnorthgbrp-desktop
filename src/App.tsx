@@ -2,6 +2,7 @@ import { useEffect, useRef, type ReactNode } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import Sidebar from './components/Sidebar';
+import AiChat from './components/AiChat';
 import Dashboard from './pages/Dashboard';
 import Analytics from './pages/Analytics';
 import Settings from './pages/Settings';
@@ -149,6 +150,7 @@ function AppShell() {
           <Route path="*"          element={<Navigate to="/dashboard" replace />} />
         </Routes>
       </main>
+      <AiChat />
     </div>
   );
 }
