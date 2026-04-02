@@ -75,6 +75,9 @@ export default function AiChat() {
   const messagesEndRef  = useRef<HTMLDivElement>(null);
   const inputRef        = useRef<HTMLTextAreaElement>(null);
   const recognitionRef  = useRef<any>(null);
+  const charQueueRef    = useRef<string[]>([]);
+  const typingTimerRef  = useRef<ReturnType<typeof setInterval> | null>(null);
+  const streamDoneRef   = useRef(false);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -97,6 +100,38 @@ export default function AiChat() {
   const handleInputChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
     setInput(e.target.value);
     resizeTextarea(e.target);
+  };
+
+  // ── Typewriter ───────────────────────────────────────────────────────────────
+
+  const startTyping = () => {
+    if (typingTimerRef.current) return;
+    typingTimerRef.current = setInterval(() => {
+      const queue = charQueueRef.current;
+      if (queue.length === 0) {
+        if (streamDoneRef.current) {
+          clearInterval(typingTimerRef.current!);
+          typingTimerRef.current = null;
+          streamDoneRef.current = false;
+        }
+        return;
+      }
+      const chars = queue.splice(0, 2).join('');
+      setMessages(prev => {
+        const msgs = [...prev];
+        const last = msgs[msgs.length - 1];
+        if (last?.role === 'assistant') {
+          msgs[msgs.length - 1] = { ...last, content: last.content + chars };
+        }
+        return msgs;
+      });
+    }, 25);
+  };
+
+  const stopTyping = () => {
+    if (typingTimerRef.current) { clearInterval(typingTimerRef.current); typingTimerRef.current = null; }
+    charQueueRef.current = [];
+    streamDoneRef.current = false;
   };
 
   // ── Voice input ─────────────────────────────────────────────────────────────
@@ -160,6 +195,7 @@ export default function AiChat() {
     if (!content || loading) return;
 
     if (isListening) stopListening();
+    stopTyping();
 
     const userMsg: Message = { role: 'user', content };
     const newMessages = [...messages, userMsg];
@@ -209,25 +245,22 @@ export default function AiChat() {
               if (!started) {
                 started = true;
                 setLoading(false);
-                setMessages(prev => [...prev, { role: 'assistant', content: chunk }]);
-              } else {
-                setMessages(prev => {
-                  const msgs = [...prev];
-                  const last = msgs[msgs.length - 1];
-                  msgs[msgs.length - 1] = { ...last, content: last.content + chunk };
-                  return msgs;
-                });
+                setMessages(prev => [...prev, { role: 'assistant', content: '' }]);
+                startTyping();
               }
+              charQueueRef.current.push(...chunk.split(''));
             }
           } catch {}
         }
       }
 
+      streamDoneRef.current = true;
       if (!started) {
         setMessages(prev => [...prev, { role: 'assistant', content: 'Sin respuesta.' }]);
       }
     } catch {
       setError('Error de conexión. Revisá tu internet.');
+      stopTyping();
     } finally {
       setLoading(false);
     }
