@@ -9,7 +9,6 @@ import './Cupones.css';
 // ── Config ────────────────────────────────────────────────────────────────────
 
 const WEBHOOK_GET   = 'https://devwebhookn8n.santafeia.shop/webhook/cupones-web-f';
-const TN_BASE       = 'https://api.tiendanube.com/v1';
 const POLL_INTERVAL = 60_000; // 60 segundos
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -85,14 +84,15 @@ async function fetchAllCupones(storeId: string, token: string): Promise<Cupon[]>
   const all: Cupon[] = [];
   for (let page = 1; page <= 20; page++) {
     // Usamos siempre el proxy Vercel — el browser no puede llamar directo a TN
-    // con el header Authentication (CORS lo bloquea)
-    const qs = new URLSearchParams({ storeId, token, path: 'coupons', per_page: '50', page: String(page) });
+    // con el header Authentication (CORS lo bloquea).
+    // TiendaNube limita a 30 ítems por página independientemente del per_page.
+    const qs = new URLSearchParams({ storeId, token, path: 'coupons', per_page: '30', page: String(page) });
     const res = await fetch(`/api/tiendanube?${qs}`);
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const data = await res.json() as Cupon[];
     if (data.length === 0) break;   // página vacía = no hay más
     all.push(...data);
-    if (data.length < 50) break;    // página incompleta = última página
+    if (data.length < 30) break;    // página incompleta = última página
   }
   return all;
 }
