@@ -143,7 +143,7 @@ export default function Dashboard() {
       {metrics && (
         <div className="metrics-both-grids">
           <div className="metrics-grid">
-            <MetricCard title="Ganancia Total (90d)"  value={'$ ' + fmtInt(metrics.totalFacturado)} icon={<DollarSign size={18} />} />
+            <MetricCard title="Ventas Totales (90d)"  value={'$ ' + fmtInt(metrics.totalFacturado)} icon={<DollarSign size={18} />} />
             <MetricCard title="Ventas Hoy"            value={'$ ' + fmt(metrics.ventasHoy)}         icon={<Activity size={18} />}     subtitle={resets.labelHoy} />
             <MetricCard title="Ventas Semana"         value={'$ ' + fmt(metrics.ventasSemana)}      icon={<CalendarDays size={18} />} subtitle={resets.labelSemana} />
           </div>
