@@ -1,0 +1,78 @@
+export const config = { runtime: 'edge' };
+
+const TN_TOKEN = '24cddf241e9dd8128a078572aeb7cc3da5a45f06';
+const TN_STORE = '3349973';
+const TN_BASE  = `https://api.tiendanube.com/v1/${TN_STORE}`;
+const TN_HDR   = {
+  Authentication: `bearer ${TN_TOKEN}`,
+  'User-Agent': 'NovaDashboard (contact@fromnorthgb.com)',
+};
+
+const SB_URL = 'https://tnmmbfcbviowhunnrzix.supabase.co';
+const SB_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRubW1iZmNidmlvd2h1bm5yeml4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQyMTc4MzcsImV4cCI6MjA4OTc5MzgzN30.ZZD8evIrlfY_77-DEh47L-JJxFOxhH8L9xZ_NjHN6QU';
+
+const DAYS_BACK = 90;
+
+export default async function handler(req: Request): Promise<Response> {
+  const CORS = {
+    'Access-Control-Allow-Origin': '*',
+    'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+    'Access-Control-Allow-Headers': 'Content-Type',
+  };
+  if (req.method === 'OPTIONS') return new Response(null, { headers: CORS });
+
+  const since = new Date(Date.now() - DAYS_BACK * 86_400_000).toISOString();
+  const allOrders: any[] = [];
+
+  for (let page = 1; page <= 5; page++) {
+    const qs = new URLSearchParams({ per_page: '200', page: String(page), created_at_min: since });
+    const res = await fetch(`${TN_BASE}/orders?${qs}`, { headers: TN_HDR });
+    if (!res.ok) break;
+    const data = await res.json() as any[];
+    if (!Array.isArray(data) || data.length === 0) break;
+
+    for (const o of data) {
+      allOrders.push({
+        id: o.id, number: o.number, status: o.status,
+        payment_status: o.payment_status, total: o.total,
+        subtotal: o.subtotal, total_shipping: o.total_shipping,
+        discount: o.discount, created_at: o.created_at,
+        customer: o.customer
+          ? { id: o.customer.id, name: o.customer.name, email: o.customer.email }
+          : null,
+        products: (o.products ?? []).map((p: any) => ({
+          name: p.name, quantity: p.quantity, price: p.price, sku: p.sku ?? null,
+        })),
+        payment_details: o.payment_details
+          ? { method: o.payment_details.method, credit_card_company: o.payment_details.credit_card_company ?? null }
+          : null,
+        coupon: o.coupon ?? null,
+      });
+    }
+
+    const hasMore = (res.headers.get('Link') ?? '').includes('rel="next"');
+    if (!hasMore) break;
+  }
+
+  const sbRes = await fetch(`${SB_URL}/rest/v1/tn_orders_cache`, {
+    method: 'POST',
+    headers: {
+      apikey: SB_KEY,
+      Authorization: `Bearer ${SB_KEY}`,
+      'Content-Type': 'application/json',
+      Prefer: 'resolution=merge-duplicates',
+    },
+    body: JSON.stringify({ id: 'main', orders: allOrders, updated_at: new Date().toISOString() }),
+  });
+
+  if (!sbRes.ok) {
+    const err = await sbRes.text();
+    return new Response(JSON.stringify({ error: 'Supabase error', detail: err }), {
+      status: 500, headers: { ...CORS, 'Content-Type': 'application/json' },
+    });
+  }
+
+  return new Response(JSON.stringify({ ok: true, orders: allOrders.length }), {
+    headers: { ...CORS, 'Content-Type': 'application/json' },
+  });
+}

@@ -1,4 +1,7 @@
 {
+  "crons": [
+    { "path": "/api/sync-metrics", "schedule": "*/5 * * * *" }
+  ],
   "rewrites": [
     { "source": "/(.*)", "destination": "/index.html" }
   ]

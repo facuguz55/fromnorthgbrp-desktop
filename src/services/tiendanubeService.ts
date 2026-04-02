@@ -211,6 +211,54 @@ export function clearTNCache() {
   try { localStorage.removeItem(CACHE_KEY); } catch { /* ignore */ }
 }
 
+// ── Supabase orders cache ─────────────────────────────────────────────────────
+
+const SB_URL = 'https://tnmmbfcbviowhunnrzix.supabase.co';
+const SB_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRubW1iZmNidmlvd2h1bm5yeml4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQyMTc4MzcsImV4cCI6MjA4OTc5MzgzN30.ZZD8evIrlfY_77-DEh47L-JJxFOxhH8L9xZ_NjHN6QU';
+const SB_ORDERS_TTL = 10 * 60 * 1000; // 10 minutos
+
+async function fetchSupabaseOrders(): Promise<TNOrder[] | null> {
+  try {
+    const res = await fetch(
+      `${SB_URL}/rest/v1/tn_orders_cache?id=eq.main&select=orders,updated_at`,
+      { headers: { apikey: SB_KEY, Authorization: `Bearer ${SB_KEY}` } }
+    );
+    if (!res.ok) return null;
+    const rows = await res.json() as any[];
+    if (!rows?.[0]?.orders) return null;
+    const age = Date.now() - new Date(rows[0].updated_at).getTime();
+    if (age > SB_ORDERS_TTL) return null;
+    return rows[0].orders as TNOrder[];
+  } catch {
+    return null;
+  }
+}
+
+function saveOrdersToSupabase(orders: TNOrder[]): Promise<void> {
+  const slim = orders.map(o => ({
+    id: o.id, number: o.number, status: o.status,
+    payment_status: o.payment_status, total: o.total,
+    subtotal: o.subtotal, total_shipping: o.total_shipping,
+    discount: o.discount, created_at: o.created_at,
+    customer: o.customer
+      ? { id: o.customer.id, name: o.customer.name, email: o.customer.email }
+      : null,
+    products: o.products.map(p => ({ name: p.name, quantity: p.quantity, price: p.price, sku: p.sku })),
+    payment_details: o.payment_details ?? null,
+    coupon: o.coupon ?? null,
+  }));
+  return fetch(`${SB_URL}/rest/v1/tn_orders_cache`, {
+    method: 'POST',
+    headers: {
+      apikey: SB_KEY,
+      Authorization: `Bearer ${SB_KEY}`,
+      'Content-Type': 'application/json',
+      Prefer: 'resolution=merge-duplicates',
+    },
+    body: JSON.stringify({ id: 'main', orders: slim, updated_at: new Date().toISOString() }),
+  }).then(() => {});
+}
+
 /**
  * Devuelve datos persistidos de localStorage aunque estén viejos.
  * Útil para mostrar datos instantáneamente al cargar la página.
@@ -570,7 +618,9 @@ export async function fetchTNMetrics(
     }
   }
 
-  const allOrders = await fetchOrdersAll(storeId, token, onProgress);
+  const sbOrders = forceRefresh ? null : await fetchSupabaseOrders();
+  const allOrders = sbOrders ?? await fetchOrdersAll(storeId, token, onProgress);
+  if (!sbOrders) saveOrdersToSupabase(allOrders).catch(() => {});
 
   const { todayStartMS, weekStartMS, monthStartMS } = getARBoundaries();
 
