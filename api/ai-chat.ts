@@ -456,57 +456,125 @@ export default async function handler(req: Request): Promise<Response> {
   }
 
   const allMessages: any[] = [...body.messages];
-  let finalText = '';
 
-  for (let i = 0; i < 4; i++) {
-    const claudeRes = await fetch('https://api.anthropic.com/v1/messages', {
-      method: 'POST',
-      headers: {
-        'x-api-key': apiKey,
-        'anthropic-version': '2023-06-01',
-        'content-type': 'application/json',
-      },
-      body: JSON.stringify({
-        model: 'claude-sonnet-4-6',
-        max_tokens: 1024,
-        system: SYSTEM,
-        tools,
-        messages: allMessages,
-      }),
-    });
+  const stream = new ReadableStream({
+    async start(controller) {
+      const encoder = new TextEncoder();
+      const send = (chunk: object) =>
+        controller.enqueue(encoder.encode(`data: ${JSON.stringify(chunk)}\n\n`));
 
-    if (!claudeRes.ok) {
-      const err = await claudeRes.text();
-      return new Response(JSON.stringify({ error: `Claude API error ${claudeRes.status}: ${err.slice(0, 300)}` }), {
-        status: 502, headers: { ...CORS, 'Content-Type': 'application/json' },
-      });
-    }
+      try {
+        for (let i = 0; i < 4; i++) {
+          const claudeRes = await fetch('https://api.anthropic.com/v1/messages', {
+            method: 'POST',
+            headers: {
+              'x-api-key': apiKey,
+              'anthropic-version': '2023-06-01',
+              'content-type': 'application/json',
+            },
+            body: JSON.stringify({
+              model: 'claude-haiku-4-5-20251001',
+              max_tokens: 1024,
+              system: SYSTEM,
+              tools,
+              messages: allMessages,
+              stream: true,
+            }),
+          });
 
-    const claude = await claudeRes.json() as any;
+          if (!claudeRes.ok) {
+            const err = await claudeRes.text();
+            send({ error: `Claude API error ${claudeRes.status}: ${err.slice(0, 200)}` });
+            break;
+          }
 
-    if (claude.stop_reason === 'end_turn') {
-      finalText = (claude.content as any[]).find((b: any) => b.type === 'text')?.text ?? '';
-      break;
-    }
+          const reader = claudeRes.body!.getReader();
+          const decoder = new TextDecoder();
 
-    if (claude.stop_reason === 'tool_use') {
-      allMessages.push({ role: 'assistant', content: claude.content });
-      const results: any[] = [];
-      for (const block of claude.content as any[]) {
-        if (block.type === 'tool_use') {
-          const result = await executeTool(block.name, block.input ?? {});
-          results.push({ type: 'tool_result', tool_use_id: block.id, content: result });
+          let stopReason = '';
+          let assistantContent: any[] = [];
+          let currentTextBlock: any = null;
+          let currentToolBlock: any = null;
+          let inputJsonAccum = '';
+          let buffer = '';
+
+          while (true) {
+            const { done, value } = await reader.read();
+            if (done) break;
+
+            buffer += decoder.decode(value, { stream: true });
+            const lines = buffer.split('\n');
+            buffer = lines.pop() ?? '';
+
+            for (const line of lines) {
+              if (!line.startsWith('data: ')) continue;
+              const data = line.slice(6).trim();
+              if (!data || data === '[DONE]') continue;
+
+              try {
+                const event = JSON.parse(data);
+                switch (event.type) {
+                  case 'content_block_start':
+                    if (event.content_block.type === 'text') {
+                      currentTextBlock = { type: 'text', text: '' };
+                      assistantContent.push(currentTextBlock);
+                    } else if (event.content_block.type === 'tool_use') {
+                      currentToolBlock = { type: 'tool_use', id: event.content_block.id, name: event.content_block.name, input: {} };
+                      assistantContent.push(currentToolBlock);
+                      inputJsonAccum = '';
+                    }
+                    break;
+                  case 'content_block_delta':
+                    if (event.delta.type === 'text_delta') {
+                      const text = event.delta.text;
+                      if (currentTextBlock) currentTextBlock.text += text;
+                      send({ text });
+                    } else if (event.delta.type === 'input_json_delta') {
+                      inputJsonAccum += event.delta.partial_json;
+                    }
+                    break;
+                  case 'content_block_stop':
+                    if (currentToolBlock) {
+                      try { currentToolBlock.input = JSON.parse(inputJsonAccum || '{}'); } catch {}
+                      currentToolBlock = null;
+                      inputJsonAccum = '';
+                    }
+                    currentTextBlock = null;
+                    break;
+                  case 'message_delta':
+                    stopReason = event.delta.stop_reason ?? '';
+                    break;
+                }
+              } catch {}
+            }
+          }
+
+          if (stopReason === 'end_turn') break;
+
+          if (stopReason === 'tool_use') {
+            allMessages.push({ role: 'assistant', content: assistantContent });
+            const toolUseBlocks = assistantContent.filter(b => b.type === 'tool_use');
+            const results: any[] = [];
+            for (const tool of toolUseBlocks) {
+              const result = await executeTool(tool.name, tool.input ?? {});
+              results.push({ type: 'tool_result', tool_use_id: tool.id, content: result });
+            }
+            allMessages.push({ role: 'user', content: results });
+            assistantContent = [];
+          } else {
+            break;
+          }
         }
+      } catch (err) {
+        send({ error: `Error interno: ${String(err).slice(0, 200)}` });
       }
-      allMessages.push({ role: 'user', content: results });
-      continue;
-    }
 
-    finalText = (claude.content as any[])?.find((b: any) => b.type === 'text')?.text ?? 'Sin respuesta.';
-    break;
-  }
+      controller.enqueue(encoder.encode('data: [DONE]\n\n'));
+      controller.close();
+    },
+  });
 
-  return new Response(JSON.stringify({ response: finalText || 'No pude generar una respuesta.' }), {
-    headers: { ...CORS, 'Content-Type': 'application/json' },
+  return new Response(stream, {
+    headers: { ...CORS, 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-cache' },
   });
 }

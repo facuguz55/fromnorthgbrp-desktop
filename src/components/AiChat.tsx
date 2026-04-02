@@ -177,11 +177,54 @@ export default function AiChat() {
           messages: newMessages.map(m => ({ role: m.role, content: m.content })),
         }),
       });
-      const data = await res.json();
-      if (!res.ok || data.error) {
-        setError(data.error ?? 'Error desconocido');
-      } else {
-        setMessages(prev => [...prev, { role: 'assistant', content: data.response }]);
+
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        setError((data as any).error ?? `Error ${res.status}`);
+        return;
+      }
+
+      const reader = res.body!.getReader();
+      const decoder = new TextDecoder();
+      let started = false;
+      let buffer = '';
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split('\n');
+        buffer = lines.pop() ?? '';
+
+        for (const line of lines) {
+          if (!line.startsWith('data: ')) continue;
+          const data = line.slice(6).trim();
+          if (data === '[DONE]') break;
+
+          try {
+            const { text: chunk, error: streamError } = JSON.parse(data);
+            if (streamError) { setError(streamError); break; }
+            if (chunk) {
+              if (!started) {
+                started = true;
+                setLoading(false);
+                setMessages(prev => [...prev, { role: 'assistant', content: chunk }]);
+              } else {
+                setMessages(prev => {
+                  const msgs = [...prev];
+                  const last = msgs[msgs.length - 1];
+                  msgs[msgs.length - 1] = { ...last, content: last.content + chunk };
+                  return msgs;
+                });
+              }
+            }
+          } catch {}
+        }
+      }
+
+      if (!started) {
+        setMessages(prev => [...prev, { role: 'assistant', content: 'Sin respuesta.' }]);
       }
     } catch {
       setError('Error de conexión. Revisá tu internet.');
