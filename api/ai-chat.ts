@@ -22,7 +22,7 @@ const GRAPH_API = 'https://graph.facebook.com/v19.0';
 async function loadMemories(): Promise<string> {
   try {
     const res = await fetch(
-      `${SUPABASE_URL}/rest/v1/ai_memory?select=category,title,content,tags,confidence&order=updated_at.desc&limit=40`,
+      `${SUPABASE_URL}/rest/v1/dashboard_chat_memory?select=category,title,content,tags,confidence&order=updated_at.desc&limit=40`,
       { headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}` } }
     );
     if (!res.ok) return '';
@@ -568,7 +568,7 @@ async function executeTool(name: string, input: Record<string, any>): Promise<st
         };
         if (input.tags)       body.tags       = input.tags;
         if (input.confidence) body.confidence = input.confidence;
-        const res = await fetch(`${SUPABASE_URL}/rest/v1/ai_memory`, {
+        const res = await fetch(`${SUPABASE_URL}/rest/v1/dashboard_chat_memory`, {
           method: 'POST',
           headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}`, 'Content-Type': 'application/json', Prefer: 'return=minimal' },
           body: JSON.stringify(body),
@@ -580,7 +580,7 @@ async function executeTool(name: string, input: Record<string, any>): Promise<st
       case 'search_memory': {
         const q = encodeURIComponent(`%${input.query}%`);
         const res = await fetch(
-          `${SUPABASE_URL}/rest/v1/ai_memory?or=(title.ilike.${q},content.ilike.${q})&order=updated_at.desc&limit=10`,
+          `${SUPABASE_URL}/rest/v1/dashboard_chat_memory?or=(title.ilike.${q},content.ilike.${q})&order=updated_at.desc&limit=10`,
           { headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}` } }
         );
         const data = await res.json() as any[];
