@@ -112,8 +112,9 @@ async function upsertRows(newOrders: any[]): Promise<void> {
   });
 }
 
-// Handler estilo Node.js: responde 200 de inmediato para no dar timeout al cron,
-// luego sigue ejecutando el sync en background hasta completar o llegar a maxDuration.
+// Handler sincrónico: espera a que el sync termine antes de responder.
+// El frontend espera este 200 para saber que tn_orders_cache está actualizado.
+// Para cron-job.org: configurar timeout en 55 segundos.
 export default async function handler(req: any, res: any): Promise<void> {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
@@ -123,13 +124,11 @@ export default async function handler(req: any, res: any): Promise<void> {
 
   const full = (req.query?.full ?? new URL(req.url, 'http://x').searchParams.get('full')) === '1';
 
-  // Responder inmediatamente — el cron ve 200 y no da timeout
-  res.status(200).json({ ok: true, started: true, mode: full ? 'full' : 'incremental' });
-
-  // Continuar el sync después de enviar la respuesta
   try {
-    await doSync(full);
+    const result = await doSync(full);
+    res.status(200).json({ ok: true, ...result });
   } catch (err: any) {
     console.error('[sync-metrics] Error:', err?.message ?? err);
+    res.status(500).json({ ok: false, error: String(err?.message ?? err) });
   }
 }
