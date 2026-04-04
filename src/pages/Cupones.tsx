@@ -86,22 +86,20 @@ function normalizeCupones(raw: unknown): Cupon[] {
 
 async function fetchAllCupones(storeId: string, token: string): Promise<Cupon[]> {
   const all: Cupon[] = [];
-  let sinceId = 0;
 
-  for (let guard = 0; guard < 50; guard++) {
+  for (let page = 1; page <= 50; page++) {
     const params: Record<string, string> = {
-      storeId, token, path: 'coupons', per_page: '30',
+      storeId, token, path: 'coupons', per_page: '30', page: String(page),
     };
-    if (sinceId > 0) params.since_id = String(sinceId);
 
     const res = await fetch(`/api/tiendanube?${new URLSearchParams(params)}`);
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
 
     const data = await res.json() as Cupon[];
-    if (!data.length) break;                          // sin más resultados
+    if (!data.length) break;
 
     all.push(...data);
-    sinceId = Number(data[data.length - 1].id);       // avanzar cursor
+    if (data.length < 30) break; // última página
   }
 
   return all;
