@@ -98,7 +98,7 @@ function OrdenRow({ o, i }: { o: TNOrder; i: number }) {
         <span className="tn-client-name">{o.customer?.name ?? '—'}</span>
         {o.customer?.email && <span className="tn-client-email">{o.customer.email}</span>}
       </td>
-      <td className="tn-td-productos">{o.products.map(p => p.name).join(', ') || '—'}</td>
+      <td className="tn-td-productos">{(o.products ?? []).map(p => p?.name).join(', ') || '—'}</td>
       <td className="tn-td-total">{fmtARS(parseFloat(o.total))}</td>
       <td>
         <span className={`tn-badge ${paymentStatusClass(o.payment_status)}`}>
