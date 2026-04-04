@@ -10,8 +10,10 @@ import './Cupones.css';
 // ── Config ────────────────────────────────────────────────────────────────────
 
 const WEBHOOK_GET   = 'https://devwebhookn8n.santafeia.shop/webhook/cupones-web-f';
-const POLL_INTERVAL = 60_000; // 60 segundos
+const POLL_INTERVAL = 60_000;
 const PAGE_SIZE     = 30;
+// TiendaNube caps coupons at 30 per page regardless of per_page param
+const TN_PAGE_SIZE  = 30;
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -40,12 +42,7 @@ interface FormState {
 }
 
 const FORM_EMPTY: FormState = {
-  code: '',
-  type: 'percentage',
-  value: '',
-  min_price: '',
-  max_uses: '',
-  valid_until: '',
+  code: '', type: 'percentage', value: '', min_price: '', max_uses: '', valid_until: '',
 };
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -80,18 +77,19 @@ function normalizeCupones(raw: unknown): Cupon[] {
   return [];
 }
 
-// ── Fetch todos los cupones paginando via proxy ───────────────────────────────
-// TiendaNube usa since_id para paginar: cada request trae hasta 30 ítems
-// con ID > since_id. Se repite hasta recibir una página vacía.
+// ── Fetch all coupons via proxy (TN caps at 30/page) ─────────────────────────
 
 async function fetchAllCupones(storeId: string, token: string): Promise<Cupon[]> {
   const all: Cupon[] = [];
   const seen = new Set<number | string>();
 
-  for (let page = 1; page <= 20; page++) {
-    const res = await fetch(
-      `/api/tiendanube?${new URLSearchParams({ storeId, token, path: 'coupons', per_page: '200', page: String(page) })}`
-    );
+  for (let page = 1; page <= 100; page++) {
+    const qs = new URLSearchParams({
+      storeId, token, path: 'coupons',
+      per_page: String(TN_PAGE_SIZE),
+      page: String(page),
+    });
+    const res = await fetch(`/api/tiendanube?${qs}`);
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
 
     const data = await res.json() as Cupon[];
@@ -99,10 +97,17 @@ async function fetchAllCupones(storeId: string, token: string): Promise<Cupon[]>
 
     let addedNew = false;
     for (const item of data) {
-      if (!seen.has(item.id)) { seen.add(item.id); all.push(item); addedNew = true; }
+      if (!seen.has(item.id)) {
+        seen.add(item.id);
+        all.push(item);
+        addedNew = true;
+      }
     }
+
+    // If API ignores page param and returns same items, stop
     if (!addedNew) break;
-    if (data.length < 200) break;
+    // If fewer items than page size, this is the last page
+    if (data.length < TN_PAGE_SIZE) break;
   }
 
   return all;
@@ -124,20 +129,80 @@ function EstadoBadge({ valid }: { valid: boolean }) {
   );
 }
 
+// ── Form fields (shared between create and edit) ──────────────────────────────
+
+function CuponFormFields({
+  form, onChange,
+}: {
+  form: FormState;
+  onChange: (k: keyof FormState, v: string) => void;
+}) {
+  return (
+    <div className="cupones-form-grid">
+      {(form as any).__isEdit !== true && (
+        <div className="form-field">
+          <label className="form-label">Código *</label>
+          <input className="form-input" placeholder="Ej: VERANO20" value={form.code}
+            onChange={e => onChange('code', e.target.value.toUpperCase())} maxLength={30} />
+        </div>
+      )}
+      <div className="form-field">
+        <label className="form-label">Tipo *</label>
+        <div className="form-tipo-group">
+          {([
+            { key: 'percentage', label: '% Descuento', icon: <Percent size={13} /> },
+            { key: 'absolute',   label: '$ Fijo',      icon: <DollarSign size={13} /> },
+            { key: 'shipping',   label: 'Envío gratis', icon: <Truck size={13} /> },
+          ] as { key: TipoDescuento; label: string; icon: React.ReactNode }[]).map(t => (
+            <button key={t.key} type="button"
+              className={`tipo-btn ${form.type === t.key ? 'active' : ''}`}
+              onClick={() => onChange('type', t.key)}>
+              {t.icon}{t.label}
+            </button>
+          ))}
+        </div>
+      </div>
+      {form.type !== 'shipping' && (
+        <div className="form-field">
+          <label className="form-label">{form.type === 'percentage' ? 'Porcentaje (%)' : 'Monto ($)'} *</label>
+          <input className="form-input" type="number" min="0"
+            placeholder={form.type === 'percentage' ? 'Ej: 20' : 'Ej: 500'}
+            value={form.value} onChange={e => onChange('value', e.target.value)} />
+        </div>
+      )}
+      <div className="form-field">
+        <label className="form-label">Compra mínima ($) <span className="form-label-opt">opcional</span></label>
+        <input className="form-input" type="number" min="0" placeholder="Ej: 5000"
+          value={form.min_price} onChange={e => onChange('min_price', e.target.value)} />
+      </div>
+      <div className="form-field">
+        <label className="form-label">Límite de usos <span className="form-label-opt">opcional</span></label>
+        <input className="form-input" type="number" min="1" placeholder="Vacío = ilimitado"
+          value={form.max_uses} onChange={e => onChange('max_uses', e.target.value)} />
+      </div>
+      <div className="form-field">
+        <label className="form-label">Vence el <span className="form-label-opt">opcional</span></label>
+        <input className="form-input" type="date" value={form.valid_until}
+          onChange={e => onChange('valid_until', e.target.value)} />
+      </div>
+    </div>
+  );
+}
+
 // ── Main component ────────────────────────────────────────────────────────────
 
 export default function Cupones() {
-  const [cupones,       setCupones]       = useState<Cupon[]>([]);
-  const [loading,       setLoading]       = useState(false);
-  const [error,         setError]         = useState<string | null>(null);
-  const [showForm,      setShowForm]      = useState(false);
-  const [form,          setForm]          = useState<FormState>(FORM_EMPTY);
-  const [creating,      setCreating]      = useState(false);
-  const [toast,         setToast]         = useState<{ type: 'ok' | 'err'; msg: string } | null>(null);
-  const [editingCupon,  setEditingCupon]  = useState<Cupon | null>(null);
-  const [editForm,      setEditForm]      = useState<FormState>(FORM_EMPTY);
-  const [updating,      setUpdating]      = useState(false);
-  const [page,          setPage]          = useState(1);
+  const [cupones,      setCupones]      = useState<Cupon[]>([]);
+  const [loading,      setLoading]      = useState(false);
+  const [error,        setError]        = useState<string | null>(null);
+  const [showForm,     setShowForm]     = useState(false);
+  const [form,         setForm]         = useState<FormState>(FORM_EMPTY);
+  const [creating,     setCreating]     = useState(false);
+  const [editingCupon, setEditingCupon] = useState<Cupon | null>(null);
+  const [editForm,     setEditForm]     = useState<FormState>(FORM_EMPTY);
+  const [updating,     setUpdating]     = useState(false);
+  const [page,         setPage]         = useState(1);
+  const [toast,        setToast]        = useState<{ type: 'ok' | 'err'; msg: string } | null>(null);
   const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const showToast = (type: 'ok' | 'err', msg: string) => {
@@ -146,13 +211,15 @@ export default function Cupones() {
     toastTimer.current = setTimeout(() => setToast(null), 4000);
   };
 
+  // ── Fetch ──────────────────────────────────────────────────────────────────
+
   const fetchCupones = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
       const settings = getSettings();
-      const storeId  = settings.tiendanubeStoreId.trim();
-      const token    = settings.tiendanubeToken.trim();
+      const storeId  = settings.tiendanubeStoreId?.trim() ?? '';
+      const token    = settings.tiendanubeToken?.trim()    ?? '';
 
       let all: Cupon[];
       if (storeId && token) {
@@ -183,11 +250,46 @@ export default function Cupones() {
     };
   }, [fetchCupones]);
 
-  const handleField = (k: keyof FormState, v: string) =>
-    setForm(prev => ({ ...prev, [k]: v }));
+  // ── Create ─────────────────────────────────────────────────────────────────
 
-  const handleEditField = (k: keyof FormState, v: string) =>
-    setEditForm(prev => ({ ...prev, [k]: v }));
+  const handleCreate = async () => {
+    if (!form.code.trim() || (form.type !== 'shipping' && !form.value.trim())) {
+      showToast('err', 'El código y el valor son obligatorios.');
+      return;
+    }
+    const settings = getSettings();
+    const storeId  = settings.tiendanubeStoreId?.trim() ?? '';
+    const token    = settings.tiendanubeToken?.trim()    ?? '';
+    if (!storeId || !token) { showToast('err', 'Configurá el Store ID y Token en Ajustes.'); return; }
+
+    setCreating(true);
+    try {
+      const body: Record<string, unknown> = {
+        code:  form.code.trim().toUpperCase(),
+        type:  form.type,
+        value: form.type !== 'shipping' ? parseFloat(form.value) : 0,
+      };
+      if (form.min_price)   body.min_price   = parseFloat(form.min_price);
+      if (form.max_uses)    body.max_uses    = parseInt(form.max_uses);
+      if (form.valid_until) body.valid_until = form.valid_until;
+
+      const res = await fetch(`/api/tiendanube?${new URLSearchParams({ storeId, token, path: 'coupons' })}`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body),
+      });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+
+      showToast('ok', `Cupón "${body.code}" creado correctamente.`);
+      setForm(FORM_EMPTY);
+      setShowForm(false);
+      fetchCupones();
+    } catch (e) {
+      showToast('err', `No se pudo crear el cupón. ${e}`);
+    } finally {
+      setCreating(false);
+    }
+  };
+
+  // ── Edit ───────────────────────────────────────────────────────────────────
 
   const handleStartEdit = (c: Cupon) => {
     setEditingCupon(c);
@@ -205,26 +307,26 @@ export default function Cupones() {
   const handleSaveEdit = async () => {
     if (!editingCupon) return;
     const settings = getSettings();
-    const storeId  = settings.tiendanubeStoreId.trim();
-    const token    = settings.tiendanubeToken.trim();
+    const storeId  = settings.tiendanubeStoreId?.trim() ?? '';
+    const token    = settings.tiendanubeToken?.trim()    ?? '';
     if (!storeId || !token) { showToast('err', 'Configurá el Store ID y Token en Ajustes.'); return; }
-    setUpdating(true);
-    const body: Record<string, unknown> = {
-      type:  editForm.type,
-      value: editForm.type !== 'shipping' ? parseFloat(editForm.value) || 0 : 0,
-    };
-    if (editForm.min_price)   body.min_price   = parseFloat(editForm.min_price);
-    if (editForm.max_uses)    body.max_uses    = parseInt(editForm.max_uses);
-    if (editForm.valid_until) body.valid_until = editForm.valid_until;
 
+    setUpdating(true);
     try {
-      const qs = new URLSearchParams({ storeId, token, path: `coupons/${editingCupon.id}` });
-      const res = await fetch(`/api/tiendanube?${qs}`, {
-        method:  'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body:    JSON.stringify(body),
-      });
+      const body: Record<string, unknown> = {
+        type:  editForm.type,
+        value: editForm.type !== 'shipping' ? parseFloat(editForm.value) || 0 : 0,
+      };
+      if (editForm.min_price)   body.min_price   = parseFloat(editForm.min_price);
+      if (editForm.max_uses)    body.max_uses    = parseInt(editForm.max_uses);
+      if (editForm.valid_until) body.valid_until = editForm.valid_until;
+
+      const res = await fetch(
+        `/api/tiendanube?${new URLSearchParams({ storeId, token, path: `coupons/${editingCupon.id}` })}`,
+        { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }
+      );
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
+
       showToast('ok', `Cupón "${editingCupon.code}" actualizado.`);
       setEditingCupon(null);
       fetchCupones();
@@ -235,52 +337,17 @@ export default function Cupones() {
     }
   };
 
-  const handleCreate = async () => {
-    if (!form.code.trim() || (form.type !== 'shipping' && !form.value.trim())) {
-      showToast('err', 'El código y el valor son obligatorios.');
-      return;
-    }
-    const settings = getSettings();
-    const storeId  = settings.tiendanubeStoreId.trim();
-    const token    = settings.tiendanubeToken.trim();
-    if (!storeId || !token) { showToast('err', 'Configurá el Store ID y Token en Ajustes.'); return; }
-    setCreating(true);
-    try {
-      const body: Record<string, unknown> = {
-        code:  form.code.trim().toUpperCase(),
-        type:  form.type,
-        value: form.type !== 'shipping' ? parseFloat(form.value) : 0,
-      };
-      if (form.min_price)   body.min_price   = parseFloat(form.min_price);
-      if (form.max_uses)    body.max_uses    = parseInt(form.max_uses);
-      if (form.valid_until) body.valid_until = form.valid_until;
+  // ── Pagination ─────────────────────────────────────────────────────────────
 
-      const qs = new URLSearchParams({ storeId, token, path: 'coupons' });
-      const res = await fetch(`/api/tiendanube?${qs}`, {
-        method:  'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body:    JSON.stringify(body),
-      });
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-
-      const nuevoCupon = await res.json() as Cupon;
-      setCupones(prev => [...prev, nuevoCupon]);
-      showToast('ok', `Cupón "${body.code}" creado correctamente.`);
-      setForm(FORM_EMPTY);
-      setShowForm(false);
-      fetchCupones();
-    } catch (e) {
-      showToast('err', `No se pudo crear el cupón. ${e}`);
-    } finally {
-      setCreating(false);
-    }
-  };
+  const totalPages = Math.ceil(cupones.length / PAGE_SIZE);
+  const paginated  = cupones.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
 
   // ── Render ──────────────────────────────────────────────────────────────────
 
   return (
     <div className="cupones-page fade-in">
 
+      {/* Header */}
       <div className="cupones-header glass-panel">
         <div className="cupones-header-left">
           <Tag size={20} className="cupones-header-icon" />
@@ -294,62 +361,25 @@ export default function Cupones() {
             <RefreshCw size={14} className={loading ? 'spinning' : ''} />
             {loading ? 'Cargando...' : 'Actualizar'}
           </button>
-          <button className="btn-primary cupones-btn-nuevo" onClick={() => setShowForm(v => !v)}>
+          <button className="btn-primary cupones-btn-nuevo" onClick={() => { setShowForm(v => !v); setEditingCupon(null); }}>
             {showForm ? <X size={15} /> : <Plus size={15} />}
             {showForm ? 'Cancelar' : 'Nuevo cupón'}
           </button>
         </div>
       </div>
 
+      {/* Edit form */}
       {editingCupon && (
         <div className="cupones-form glass-panel fade-in">
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1.1rem' }}>
             <h2 className="cupones-form-title" style={{ margin: 0 }}>
-              Editar cupón — <span style={{ color: 'var(--accent-primary)', fontFamily: 'monospace' }}>{editingCupon.code}</span>
+              Editar — <span style={{ color: 'var(--accent-primary)', fontFamily: 'monospace' }}>{editingCupon.code}</span>
             </h2>
             <button className="btn-secondary" onClick={() => setEditingCupon(null)} style={{ padding: '0.3rem 0.7rem', fontSize: '0.75rem' }}>
               <X size={13} /> Cancelar
             </button>
           </div>
-          <div className="cupones-form-grid">
-            <div className="form-field">
-              <label className="form-label">Tipo *</label>
-              <div className="form-tipo-group">
-                {([
-                  { key: 'percentage', label: '% Descuento', icon: <Percent size={13} /> },
-                  { key: 'absolute',   label: '$ Fijo',      icon: <DollarSign size={13} /> },
-                  { key: 'shipping',   label: 'Envío gratis', icon: <Truck size={13} /> },
-                ] as { key: TipoDescuento; label: string; icon: React.ReactNode }[]).map(t => (
-                  <button key={t.key} className={`tipo-btn ${editForm.type === t.key ? 'active' : ''}`}
-                    onClick={() => handleEditField('type', t.key)} type="button">
-                    {t.icon}{t.label}
-                  </button>
-                ))}
-              </div>
-            </div>
-            {editForm.type !== 'shipping' && (
-              <div className="form-field">
-                <label className="form-label">{editForm.type === 'percentage' ? 'Porcentaje (%)' : 'Monto ($)'} *</label>
-                <input className="form-input" type="number" min="0" value={editForm.value}
-                  onChange={e => handleEditField('value', e.target.value)} />
-              </div>
-            )}
-            <div className="form-field">
-              <label className="form-label">Compra mínima ($) <span className="form-label-opt">opcional</span></label>
-              <input className="form-input" type="number" min="0" placeholder="Ej: 5000"
-                value={editForm.min_price} onChange={e => handleEditField('min_price', e.target.value)} />
-            </div>
-            <div className="form-field">
-              <label className="form-label">Límite de usos <span className="form-label-opt">opcional</span></label>
-              <input className="form-input" type="number" min="1" placeholder="Vacío = ilimitado"
-                value={editForm.max_uses} onChange={e => handleEditField('max_uses', e.target.value)} />
-            </div>
-            <div className="form-field">
-              <label className="form-label">Vence el <span className="form-label-opt">opcional</span></label>
-              <input className="form-input" type="date" value={editForm.valid_until}
-                onChange={e => handleEditField('valid_until', e.target.value)} />
-            </div>
-          </div>
+          <CuponFormFields form={{ ...editForm, __isEdit: true } as any} onChange={(k, v) => setEditForm(p => ({ ...p, [k]: v }))} />
           <div className="cupones-form-footer">
             <button className="btn-primary" onClick={handleSaveEdit} disabled={updating}>
               {updating ? <><RefreshCw size={14} className="spinning" /> Guardando...</> : <><Pencil size={14} /> Guardar cambios</>}
@@ -358,54 +388,11 @@ export default function Cupones() {
         </div>
       )}
 
+      {/* Create form */}
       {showForm && (
         <div className="cupones-form glass-panel fade-in">
           <h2 className="cupones-form-title">Nuevo cupón</h2>
-          <div className="cupones-form-grid">
-            <div className="form-field">
-              <label className="form-label">Código *</label>
-              <input className="form-input" placeholder="Ej: VERANO20" value={form.code}
-                onChange={e => handleField('code', e.target.value.toUpperCase())} maxLength={30} />
-            </div>
-            <div className="form-field">
-              <label className="form-label">Tipo *</label>
-              <div className="form-tipo-group">
-                {([
-                  { key: 'percentage', label: '% Descuento', icon: <Percent size={13} /> },
-                  { key: 'absolute',   label: '$ Fijo',      icon: <DollarSign size={13} /> },
-                  { key: 'shipping',   label: 'Envío gratis', icon: <Truck size={13} /> },
-                ] as { key: TipoDescuento; label: string; icon: React.ReactNode }[]).map(t => (
-                  <button key={t.key} className={`tipo-btn ${form.type === t.key ? 'active' : ''}`}
-                    onClick={() => handleField('type', t.key)} type="button">
-                    {t.icon}{t.label}
-                  </button>
-                ))}
-              </div>
-            </div>
-            {form.type !== 'shipping' && (
-              <div className="form-field">
-                <label className="form-label">{form.type === 'percentage' ? 'Porcentaje (%)' : 'Monto ($)'} *</label>
-                <input className="form-input" type="number" min="0"
-                  placeholder={form.type === 'percentage' ? 'Ej: 20' : 'Ej: 500'}
-                  value={form.value} onChange={e => handleField('value', e.target.value)} />
-              </div>
-            )}
-            <div className="form-field">
-              <label className="form-label">Compra mínima ($) <span className="form-label-opt">opcional</span></label>
-              <input className="form-input" type="number" min="0" placeholder="Ej: 5000"
-                value={form.min_price} onChange={e => handleField('min_price', e.target.value)} />
-            </div>
-            <div className="form-field">
-              <label className="form-label">Límite de usos <span className="form-label-opt">opcional</span></label>
-              <input className="form-input" type="number" min="1" placeholder="Ej: 100 (vacío = ilimitado)"
-                value={form.max_uses} onChange={e => handleField('max_uses', e.target.value)} />
-            </div>
-            <div className="form-field">
-              <label className="form-label">Vence el <span className="form-label-opt">opcional</span></label>
-              <input className="form-input" type="date" value={form.valid_until}
-                onChange={e => handleField('valid_until', e.target.value)} />
-            </div>
-          </div>
+          <CuponFormFields form={form} onChange={(k, v) => setForm(p => ({ ...p, [k]: v }))} />
           <div className="cupones-form-footer">
             <button className="btn-primary" onClick={handleCreate} disabled={creating}>
               {creating ? <><RefreshCw size={14} className="spinning" /> Creando...</> : <><Plus size={14} /> Crear cupón</>}
@@ -414,6 +401,7 @@ export default function Cupones() {
         </div>
       )}
 
+      {/* List */}
       <div className="cupones-lista glass-panel">
         <div className="cupones-lista-header">
           <span className="cupones-lista-title">Cupones existentes</span>
@@ -426,6 +414,7 @@ export default function Cupones() {
             <span>Cargando cupones...</span>
           </div>
         )}
+
         {!loading && error && (
           <div className="cupones-error">
             <AlertCircle size={16} />
@@ -435,6 +424,7 @@ export default function Cupones() {
             </button>
           </div>
         )}
+
         {!loading && !error && cupones.length === 0 && (
           <div className="cupones-empty">
             <Tag size={32} className="cupones-empty-icon" />
@@ -442,72 +432,62 @@ export default function Cupones() {
             <p className="cupones-empty-sub">Creá el primero con el botón "Nuevo cupón"</p>
           </div>
         )}
-        {!loading && !error && cupones.length > 0 && (() => {
-          const totalPages = Math.ceil(cupones.length / PAGE_SIZE);
-          const paginated  = cupones.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
-          return (
-            <>
-              <div className="cupones-table-wrap">
-                <table className="cupones-table">
-                  <thead>
-                    <tr>
-                      <th>Código</th><th>Tipo</th><th>Compra mín.</th>
-                      <th>Usos</th><th>Vence</th><th>Estado</th><th></th>
+
+        {!loading && !error && cupones.length > 0 && (
+          <>
+            <div className="cupones-table-wrap">
+              <table className="cupones-table">
+                <thead>
+                  <tr>
+                    <th>Código</th><th>Tipo</th><th>Compra mín.</th>
+                    <th>Usos</th><th>Vence</th><th>Estado</th><th></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {paginated.map(c => (
+                    <tr key={c.id}>
+                      <td><span className="cupon-code">{c.code}</span></td>
+                      <td>
+                        <span className="cupon-tipo">
+                          <TipoIcon type={c.type} />
+                          {formatTipo(c.type, c.value)}
+                        </span>
+                      </td>
+                      <td className="cupon-secondary">
+                        {c.min_price ? `$${parseFloat(String(c.min_price)).toLocaleString('es-AR')}` : '—'}
+                      </td>
+                      <td className="cupon-secondary">
+                        {c.max_uses != null ? `${c.used} / ${c.max_uses}` : `${c.used} usos`}
+                      </td>
+                      <td className="cupon-secondary">{formatFecha(c.end_date)}</td>
+                      <td><EstadoBadge valid={c.valid} /></td>
+                      <td>
+                        <button className="cupon-edit-btn" onClick={() => handleStartEdit(c)} title="Editar cupón">
+                          <Pencil size={13} />
+                        </button>
+                      </td>
                     </tr>
-                  </thead>
-                  <tbody>
-                    {paginated.map(c => (
-                      <tr key={c.id}>
-                        <td><span className="cupon-code">{c.code}</span></td>
-                        <td>
-                          <span className="cupon-tipo">
-                            <TipoIcon type={c.type} />
-                            {formatTipo(c.type, c.value)}
-                          </span>
-                        </td>
-                        <td className="cupon-secondary">
-                          {c.min_price ? `$${parseFloat(String(c.min_price)).toLocaleString('es-AR')}` : '—'}
-                        </td>
-                        <td className="cupon-secondary">
-                          {c.max_uses != null ? `${c.used} / ${c.max_uses}` : `${c.used} usos`}
-                        </td>
-                        <td className="cupon-secondary">{formatFecha(c.end_date)}</td>
-                        <td><EstadoBadge valid={c.valid} /></td>
-                        <td>
-                          <button className="cupon-edit-btn" onClick={() => handleStartEdit(c)} title="Editar cupón">
-                            <Pencil size={13} />
-                          </button>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+
+            {totalPages > 1 && (
+              <div className="cupones-pagination">
+                <button className="cupones-pag-btn" onClick={() => setPage(p => Math.max(1, p - 1))} disabled={page === 1}>
+                  <ChevronLeft size={15} />
+                </button>
+                <span className="cupones-pag-info">
+                  Página {page} de {totalPages}
+                  <span className="cupones-pag-sub"> · {cupones.length} cupones</span>
+                </span>
+                <button className="cupones-pag-btn" onClick={() => setPage(p => Math.min(totalPages, p + 1))} disabled={page === totalPages}>
+                  <ChevronRight size={15} />
+                </button>
               </div>
-              {totalPages > 1 && (
-                <div className="cupones-pagination">
-                  <button
-                    className="cupones-pag-btn"
-                    onClick={() => setPage(p => Math.max(1, p - 1))}
-                    disabled={page === 1}
-                  >
-                    <ChevronLeft size={15} />
-                  </button>
-                  <span className="cupones-pag-info">
-                    Página {page} de {totalPages}
-                    <span className="cupones-pag-sub"> · {cupones.length} cupones</span>
-                  </span>
-                  <button
-                    className="cupones-pag-btn"
-                    onClick={() => setPage(p => Math.min(totalPages, p + 1))}
-                    disabled={page === totalPages}
-                  >
-                    <ChevronRight size={15} />
-                  </button>
-                </div>
-              )}
-            </>
-          );
-        })()}
+            )}
+          </>
+        )}
       </div>
 
       {toast && (
