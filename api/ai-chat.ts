@@ -40,6 +40,8 @@ Tenés acceso completo al sistema y podés consultar, analizar y ejecutar cambio
 - Cuando pregunten por "hoy": created_at_min="${todayISO}T00:00:00-03:00" y created_at_max="${todayISO}T23:59:59-03:00"
 - Cuando pregunten por "ayer": created_at_min="${yesterdayISO}T00:00:00-03:00" y created_at_max="${yesterdayISO}T23:59:59-03:00"
 - Para totales de ventas del día usá siempre per_page=200 para no perder órdenes
+- Para "última venta" o "última orden": llamá get_orders con per_page=1 (trae solo la más reciente, que es la primera del resultado)
+- Las órdenes siempre vienen ordenadas de más nueva a más vieja — la primera del array ES la más reciente
 
 ## Sobre el negocio y el dueño
 - El dueño es Enzo Agustín Ribot. Lo llamás Enzo.
@@ -102,16 +104,22 @@ Si el usuario pide cambios, modificá el borrador y volvé a mostrar el preview 
 const tools = [
   {
     name: 'get_orders',
-    description: 'Obtiene órdenes recientes de la tienda. Usá este tool para consultas de ventas, pagos, órdenes o clientes que compraron.',
+    description: `Obtiene órdenes de la tienda ordenadas de la MÁS NUEVA a la más vieja (descendente por fecha).
+REGLAS OBLIGATORIAS:
+- "última venta" / "última orden": per_page=1 (trae solo la más reciente)
+- "ventas de hoy": created_at_min=HOY_ISO+"T00:00:00-03:00", created_at_max=HOY_ISO+"T23:59:59-03:00", per_page=200
+- "ventas de ayer": created_at_min=AYER_ISO+"T00:00:00-03:00", created_at_max=AYER_ISO+"T23:59:59-03:00", per_page=200
+- "total de ventas": siempre usá per_page=200 y filtrá por fecha para no perder órdenes
+- Nunca uses per_page<200 cuando calculás totales o sumas`,
     input_schema: {
       type: 'object',
       properties: {
         payment_status: { type: 'string', enum: ['paid', 'pending', 'unpaid', 'authorized', 'refunded', 'voided', 'partially_paid'], description: 'Filtrar por estado de pago' },
         status: { type: 'string', enum: ['open', 'closed', 'cancelled'], description: 'Filtrar por estado de orden' },
-        per_page: { type: 'number', description: 'Resultados (max 200, default 50)' },
+        per_page: { type: 'number', description: 'Resultados (max 200). Usá 1 para la última venta, 200 para totales.' },
         page: { type: 'number', description: 'Página' },
-        created_at_min: { type: 'string', description: 'Fecha mínima ISO 8601' },
-        created_at_max: { type: 'string', description: 'Fecha máxima ISO 8601' },
+        created_at_min: { type: 'string', description: 'Fecha mínima ISO 8601 con timezone, ej: 2026-04-03T00:00:00-03:00' },
+        created_at_max: { type: 'string', description: 'Fecha máxima ISO 8601 con timezone, ej: 2026-04-03T23:59:59-03:00' },
       },
     },
   },
