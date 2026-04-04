@@ -74,9 +74,9 @@ export default async function handler(req: Request): Promise<Response> {
       });
     }
 
-    // Sync incremental (cron): solo órdenes de los últimos 30 min
-    const since = new Date(Date.now() - 30 * 60 * 1000).toISOString();
-    const qs = new URLSearchParams({ per_page: '50', page: '1', created_at_min: since });
+    // Sync incremental (cron): órdenes de las últimas 2 horas para capturar cambios de estado de pago
+    const since = new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString();
+    const qs = new URLSearchParams({ per_page: '200', page: '1', created_at_min: since });
     const tnRes = await fetch(`${TN_BASE}/orders?${qs}`, { headers: TN_HDR });
     if (!tnRes.ok) throw new Error(`TiendaNube ${tnRes.status}`);
 
