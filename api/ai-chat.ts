@@ -90,6 +90,14 @@ Antes de enviar cualquier email SIEMPRE debés mostrar al usuario un preview con
 Solo ejecutá send_email después de que el usuario confirme explícitamente (responda "sí", "envialo", "dale", "ok", "confirmado" o similar).
 Si el usuario pide cambios, modificá el borrador y volvé a mostrar el preview antes de enviar.
 
+## Ruleta de Premios
+- La ruleta es una funcionalidad del dashboard donde los clientes giran para ganar premios
+- Premios posibles: "Envio gratis", "10% de descuento", "5% de descuento", "1 Camisa gratis", "30% de descuento", "Segui participando"
+- Los giros se registran en Supabase (tabla: ruleta_girada)
+- Para habilitar un giro manual a un cliente: add_giro_ruleta con su email
+- Para quitar giros de un cliente: remove_giro_ruleta con su email
+- Para consultar stats de ruleta: get_ruleta
+
 ## Análisis
 - Siempre incluí contexto comparativo cuando das métricas
 - Detectá anomalías aunque no te lo pidan
@@ -233,6 +241,33 @@ REGLAS OBLIGATORIAS:
           description: 'Nivel de desglose (default: campaign)',
         },
       },
+    },
+  },
+  {
+    name: 'get_ruleta',
+    description: 'Obtiene estadísticas completas de la Ruleta de Premios: total de giros, premios otorgados, participantes únicos, tasa de ganadores, distribución por premio y últimos registros.',
+    input_schema: { type: 'object', properties: {} },
+  },
+  {
+    name: 'add_giro_ruleta',
+    description: 'Habilita un giro manual de ruleta para un cliente. Insertá su email en la tabla de habilitaciones.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        email: { type: 'string', description: 'Email del cliente (Gmail)' },
+      },
+      required: ['email'],
+    },
+  },
+  {
+    name: 'remove_giro_ruleta',
+    description: 'Elimina todas las habilitaciones de giro de ruleta para un cliente por su email.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        email: { type: 'string', description: 'Email del cliente' },
+      },
+      required: ['email'],
     },
   },
   {
@@ -465,6 +500,47 @@ async function executeTool(name: string, input: Record<string, any>): Promise<st
           results.juan = await fetchMetaCampaignsForAccount(META_ACCOUNTS.juan);
         }
         return JSON.stringify(results);
+      }
+
+      case 'get_ruleta': {
+        const res = await fetch(
+          `${SUPABASE_URL}/rest/v1/ruleta_girada?select=*&order=created_at.desc`,
+          { headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}` } }
+        );
+        const data = await res.json() as any[];
+        if (!Array.isArray(data)) return `Error al obtener ruleta: ${JSON.stringify(data)}`;
+        const totalGiros = data.length;
+        const premiosOtorgados = data.filter((r: any) => r.premio !== 'Segui participando').length;
+        const participantesUnicos = new Set(data.map((r: any) => r.email)).size;
+        const tasaGanadores = totalGiros > 0 ? Math.round((premiosOtorgados / totalGiros) * 100) : 0;
+        const dist: Record<string, number> = {};
+        for (const r of data) dist[r.premio] = (dist[r.premio] || 0) + 1;
+        return JSON.stringify({
+          totalGiros, premiosOtorgados, participantesUnicos, tasaGanadores,
+          distribucionPremios: Object.entries(dist).map(([premio, cantidad]) => ({ premio, cantidad })),
+          ultimosGiros: data.slice(0, 20).map((r: any) => ({ email: r.email, premio: r.premio, codigo: r.codigo, fecha: r.created_at })),
+        });
+      }
+
+      case 'add_giro_ruleta': {
+        const res = await fetch(`${SUPABASE_URL}/rest/v1/ventas`, {
+          method: 'POST',
+          headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}`, 'Content-Type': 'application/json', Prefer: 'return=minimal' },
+          body: JSON.stringify({ email: input.email }),
+        });
+        if (res.ok || res.status === 201) return `Giro habilitado para ${input.email}`;
+        return `Error ${res.status}: ${await res.text()}`;
+      }
+
+      case 'remove_giro_ruleta': {
+        const res = await fetch(
+          `${SUPABASE_URL}/rest/v1/ventas?email=eq.${encodeURIComponent(input.email)}`,
+          { method: 'DELETE', headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}`, Prefer: 'return=representation' } }
+        );
+        if (!res.ok) return `Error ${res.status}: ${await res.text()}`;
+        const deleted = await res.json();
+        const count = Array.isArray(deleted) ? deleted.length : 0;
+        return count > 0 ? `${count} giro${count !== 1 ? 's' : ''} eliminado${count !== 1 ? 's' : ''} para ${input.email}` : `No había giros pendientes para ${input.email}`;
       }
 
       default:
