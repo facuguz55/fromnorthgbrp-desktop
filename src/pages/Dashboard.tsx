@@ -95,7 +95,7 @@ export default function Dashboard() {
       const token    = settings?.tiendanubeToken?.trim()    ?? '';
       if (!storeId || !token) { setLoading(false); setSyncing(false); return; }
       if (force) clearTNCache();
-      const data = await fetchTNMetrics(storeId, token, n => setLoaded(n));
+      const data = await fetchTNMetrics(storeId, token, n => setLoaded(n), force);
       setMetrics(data);
     } catch {
       setError(true);
