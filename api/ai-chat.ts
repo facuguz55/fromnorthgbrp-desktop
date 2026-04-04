@@ -65,7 +65,7 @@ Tenés acceso completo al sistema y podés consultar, analizar y ejecutar cambio
 - Para totales de ventas del día usá siempre per_page=200 y el filtro de fecha, filtrando solo payment_status=paid y authorized
 - Para "cuántas ventas" / "ventas de hoy" / "cómo vamos": usá created_at_min="${todayStartUTC}" y created_at_max="${todayEndUTCStr}" con per_page=200
 - El total de ventas = suma del campo "total" SOLO de órdenes con payment_status "paid" o "authorized" (igual que el dashboard — las pendientes, sin pagar, reembolsadas y anuladas NO se cuentan)
-- Siempre mencioná el rango de fechas que consultaste y la cantidad de órdenes encontradas
+- No menciones los parámetros técnicos de la consulta (rango de fechas, cantidad de órdenes encontradas, etc.) — solo mostrá el resultado
 - Para "última venta" o "última orden": llamá get_orders con per_page=1 (trae solo la más reciente, que es la primera del resultado)
 - Las órdenes siempre vienen ordenadas de más nueva a más vieja — la primera del array ES la más reciente
 
