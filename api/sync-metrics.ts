@@ -73,13 +73,34 @@ async function doSync(full: boolean): Promise<{ mode: string; orders: number }> 
   return { mode: 'incremental', orders: orders.length };
 }
 
-async function upsertRows(orders: any[]): Promise<void> {
-  const rows = orders.map(o => ({
-    id: o.id,
-    data: o,
-    order_date: o.created_at,
-  }));
-  await fetch(`${SB_URL}/rest/v1/tn_order_rows`, {
+async function upsertRows(newOrders: any[]): Promise<void> {
+  if (newOrders.length === 0) return;
+
+  // 1. Leer cache actual de tn_orders_cache
+  let existing: any[] = [];
+  try {
+    const cacheRes = await fetch(
+      `${SB_URL}/rest/v1/tn_orders_cache?select=orders&id=eq.main&limit=1`,
+      { headers: { apikey: SB_KEY, Authorization: `Bearer ${SB_KEY}` } }
+    );
+    if (cacheRes.ok) {
+      const rows = await cacheRes.json() as any[];
+      if (rows?.length && rows[0]?.orders) {
+        existing = typeof rows[0].orders === 'string' ? JSON.parse(rows[0].orders) : rows[0].orders;
+      }
+    }
+  } catch { /* si falla, empieza con array vacío */ }
+
+  // 2. Merge: las nuevas órdenes sobreescriben las existentes por ID
+  const map: Record<number, any> = {};
+  for (const o of existing) map[o.id] = o;
+  for (const o of newOrders) map[o.id] = o;
+  const merged = Object.values(map).sort(
+    (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+  );
+
+  // 3. Escribir de vuelta en tn_orders_cache
+  await fetch(`${SB_URL}/rest/v1/tn_orders_cache`, {
     method: 'POST',
     headers: {
       apikey: SB_KEY,
@@ -87,7 +108,7 @@ async function upsertRows(orders: any[]): Promise<void> {
       'Content-Type': 'application/json',
       Prefer: 'resolution=merge-duplicates',
     },
-    body: JSON.stringify(rows),
+    body: JSON.stringify([{ id: 'main', orders: JSON.stringify(merged) }]),
   });
 }
 
