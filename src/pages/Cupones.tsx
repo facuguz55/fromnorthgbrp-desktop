@@ -85,32 +85,28 @@ function normalizeCupones(raw: unknown): Cupon[] {
 // con ID > since_id. Se repite hasta recibir una página vacía.
 
 async function fetchAllCupones(storeId: string, token: string): Promise<Cupon[]> {
-  // Página 1: obtener datos y total real vía X-Total-Count
-  const first = await fetch(
-    `/api/tiendanube?${new URLSearchParams({ storeId, token, path: 'coupons', per_page: '30', page: '1' })}`
-  );
-  if (!first.ok) throw new Error(`HTTP ${first.status}`);
-
-  const firstData = await first.json() as Cupon[];
-  const total = parseInt(first.headers.get('X-Total-Count') ?? '0') || firstData.length;
-  const totalPages = Math.ceil(total / 30);
-
-  if (totalPages <= 1) return firstData;
-
-  // Páginas restantes en paralelo
-  const rest = await Promise.all(
-    Array.from({ length: totalPages - 1 }, (_, i) =>
-      fetch(`/api/tiendanube?${new URLSearchParams({ storeId, token, path: 'coupons', per_page: '30', page: String(i + 2) })}`)
-        .then(r => r.ok ? r.json() as Promise<Cupon[]> : Promise.resolve([] as Cupon[]))
-    )
-  );
-
-  // Deduplicar por ID por si la API repite páginas
-  const seen = new Set<number | string>();
   const all: Cupon[] = [];
-  for (const item of [...firstData, ...rest.flat()]) {
-    if (!seen.has(item.id)) { seen.add(item.id); all.push(item); }
+  const seen = new Set<number | string>();
+
+  for (let page = 1; page <= 50; page++) {
+    const res = await fetch(
+      `/api/tiendanube?${new URLSearchParams({ storeId, token, path: 'coupons', per_page: '30', page: String(page) })}`
+    );
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+
+    const data = await res.json() as Cupon[];
+    if (!Array.isArray(data) || data.length === 0) break;
+
+    let addedNew = false;
+    for (const item of data) {
+      if (!seen.has(item.id)) { seen.add(item.id); all.push(item); addedNew = true; }
+    }
+    // Si la API devuelve los mismos ítems (no soporta page), parar
+    if (!addedNew) break;
+    // Última página real
+    if (data.length < 30) break;
   }
+
   return all;
 }
 
