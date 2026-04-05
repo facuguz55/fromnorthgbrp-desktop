@@ -220,6 +220,10 @@ export default function Mails() {
   const [enviando,      setEnviando]      = useState(false);
   const [lastRefreshed, setLastRefreshed] = useState<Date | null>(null);
   const [toast,         setToast]         = useState<{ type: 'ok' | 'err'; msg: string } | null>(null);
+  const [atendidos,     setAtendidos]     = useState<Set<string>>(() => {
+    try { return new Set(JSON.parse(localStorage.getItem('mails_atendidos') ?? '[]')); }
+    catch { return new Set(); }
+  });
   const [debugRaw,      setDebugRaw]      = useState<string | null>(null);
   const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -300,6 +304,12 @@ export default function Mails() {
       if (!res.ok) throw new Error();
       showToast('ok', '¡Respuesta enviada correctamente!');
       setRespuesta('');
+      setAtendidos(prev => {
+        const next = new Set(prev);
+        next.add(selected.id);
+        try { localStorage.setItem('mails_atendidos', JSON.stringify([...next])); } catch { /* ignore */ }
+        return next;
+      });
     } catch {
       showToast('err', 'No se pudo enviar. Intentá de nuevo.');
     } finally {
@@ -445,6 +455,11 @@ export default function Mails() {
               </div>
               <div className="mail-item-meta">
                 <CatBadge cat={mail.categoria} />
+                {atendidos.has(mail.id) && (
+                  <span className="cat-badge" style={{ color: '#10b981', background: 'rgba(16,185,129,0.13)', borderColor: '#10b98133' }}>
+                    Atendido
+                  </span>
+                )}
                 {!mail.leido && <span className="mail-unread-dot" />}
               </div>
               <p className="mail-item-summary">{mail.resumen}</p>

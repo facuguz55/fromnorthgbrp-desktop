@@ -33,6 +33,7 @@ export default async function handler(req: any, res: any): Promise<void> {
     const accessToken = await getAccessToken();
 
     const emailLines = [
+      `From: FromNorth <enzoribot02@gmail.com>`,
       `To: ${to}`,
       `Subject: ${asunto}`,
       `Content-Type: text/plain; charset=utf-8`,
