@@ -120,7 +120,10 @@ export default async function handler(req: any, res: any): Promise<void> {
       'https://gmail.googleapis.com/gmail/v1/users/me/messages?maxResults=30&q=in:inbox',
       { headers: { Authorization: `Bearer ${accessToken}` } },
     );
-    if (!listRes.ok) throw new Error(`Gmail list error: ${listRes.status}`);
+    if (!listRes.ok) {
+      const errBody = await listRes.text();
+      throw new Error(`Gmail list error: ${listRes.status} — ${errBody.slice(0, 300)}`);
+    }
     const listData = await listRes.json() as any;
     const messages: { id: string; threadId: string }[] = listData.messages ?? [];
 
