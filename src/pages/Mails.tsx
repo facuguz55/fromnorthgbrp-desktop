@@ -46,32 +46,6 @@ function resolverRemitente(mail: MailItem): 'FromNorth' | 'Cliente' {
 // ── Response normalizer ───────────────────────────────────────────────────────
 // n8n puede devolver el array directo, wrapeado en objeto, o con formato
 // interno [{json: {...}}]. Esta función maneja todos los casos.
-function normalizeMails(raw: unknown): MailItem[] {
-  if (Array.isArray(raw)) {
-    // Formato interno n8n: [{ json: { ...mailItem } }]
-    if (raw.length > 0 && raw[0] !== null && typeof raw[0] === 'object' && 'json' in (raw[0] as object)) {
-      return (raw as { json: MailItem }[]).map(item => item.json);
-    }
-    return raw as MailItem[];
-  }
-  // Objeto con claves de mail directo (n8n devuelve 1 solo item sin array)
-  if (raw !== null && typeof raw === 'object' && !Array.isArray(raw)) {
-    const obj = raw as Record<string, unknown>;
-    // Si tiene campos propios de un mail, lo envolvemos en array
-    if ('id' in obj || 'threadId' in obj || 'de' in obj) {
-      return [obj as unknown as MailItem];
-    }
-    // Wrapeado en objeto: { data: [...] } | { mails: [...] } | etc.
-    for (const key of ['data', 'mails', 'items', 'response', 'result']) {
-      if (Array.isArray(obj[key])) return obj[key] as MailItem[];
-    }
-  }
-  // JSON string
-  if (typeof raw === 'string') {
-    try { return normalizeMails(JSON.parse(raw)); } catch { /* fall through */ }
-  }
-  return [];
-}
 
 const CAT: Record<Categoria, { label: string; color: string; bg: string }> = {
   urgente:  { label: 'Urgente',  color: '#ef4444', bg: 'rgba(239,68,68,0.13)' },
