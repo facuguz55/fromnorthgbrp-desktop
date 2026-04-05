@@ -245,6 +245,7 @@ export default function Mails() {
           categoria: r.categoria as MailItem['categoria'],
           resumen: r.resumen, respuestaSugerida: r.respuesta_sugerida,
         })));
+        setAtendidos(new Set(rows.filter(r => r.respondido).map(r => r.id)));
         setFromCache(true);
       }
     }

@@ -94,11 +94,10 @@
 /* ── Filters ─────────────────────────────────────────────── */
 .mails-filters {
   display: flex;
+  flex-wrap: wrap;
   gap: 0.3rem;
   padding: 0.65rem 1rem;
-  overflow-x: auto;
   border-bottom: 1px solid var(--border-color);
-  scrollbar-width: none;
   flex-shrink: 0;
 }
 
