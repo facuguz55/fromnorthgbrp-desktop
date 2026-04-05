@@ -3,8 +3,7 @@ import {
   RefreshCw, Mail, Send, Sparkles, AlertCircle,
   CheckCircle2, Inbox, Copy, EyeOff, X,
 } from 'lucide-react';
-import { fetchMailsFromDB, upsertMails, fetchMailDetail } from '../services/supabaseService';
-import type { MailRow } from '../services/supabaseService';
+import { fetchMailsFromDB, fetchMailDetail } from '../services/supabaseService';
 import './Mails.css';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -28,8 +27,6 @@ interface MailItem {
 
 // ── Config ────────────────────────────────────────────────────────────────────
 
-const WEBHOOK_GET     = 'https://devwebhookn8n.santafeia.shop/webhook/get-mails';
-const WEBHOOK_SEND    = 'https://devwebhookn8n.santafeia.shop/webhook/responder-mail';
 const FROMNORTH_EMAIL = 'enzoribot02@gmail.com';
 
 // Determina si el mail es de FromNorth:
@@ -278,43 +275,29 @@ export default function Mails() {
     }
 
     try {
-      const res = await fetch(WEBHOOK_GET, {
-        method: 'POST',
-        headers: { 'Accept': 'application/json' },
-      });
+      // Sincroniza Gmail → Supabase (fetch + clasificación IA en el servidor)
+      const res = await fetch('/api/gmail-sync', { method: 'POST' });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
 
-      const text = await res.text();
-      if (!res.ok) throw new Error(`HTTP ${res.status}: ${text.slice(0, 200)}`);
-      if (!text.trim()) throw new Error('El webhook devolvió una respuesta vacía');
+      // Leer desde Supabase (ya actualizado)
+      const rows = await fetchMailsFromDB();
+      const freshMails: MailItem[] = rows.map(r => ({
+        id: r.id,
+        threadId: r.thread_id,
+        de: r.de,
+        nombre: r.nombre,
+        asunto: r.asunto,
+        cuerpo: r.cuerpo,
+        fecha: r.fecha,
+        leido: r.leido,
+        categoria: r.categoria as MailItem['categoria'],
+        resumen: r.resumen,
+        respuestaSugerida: r.respuesta_sugerida,
+      }));
 
-      let raw: unknown;
-      try { raw = JSON.parse(text); }
-      catch { throw new Error(`No es JSON válido. Recibido: ${text.slice(0, 200)}`); }
-
-      const freshMails = normalizeMails(raw);
-      if (freshMails.length === 0) setDebugRaw(text.slice(0, 800));
-
-      // 2. Mostrar frescos
       setMails(freshMails);
       setFromCache(false);
       setLastRefreshed(new Date());
-
-      // 3. Guardar solo los NUEVOS en Supabase (upsert por id)
-      if (freshMails.length > 0) {
-        upsertMails(freshMails.map((m: MailItem): MailRow => ({
-          id: m.id,
-          thread_id: m.threadId,
-          de: m.de,
-          nombre: m.nombre,
-          asunto: m.asunto,
-          cuerpo: m.cuerpo ?? '',
-          fecha: m.fecha,
-          leido: m.leido,
-          categoria: m.categoria,
-          resumen: m.resumen,
-          respuesta_sugerida: m.respuestaSugerida,
-        })));
-      }
     } catch (err) {
       console.error('[Mails] error:', err);
       setDebugRaw(String(err));
@@ -330,7 +313,7 @@ export default function Mails() {
     if (!selected || !respuesta.trim()) return;
     setEnviando(true);
     try {
-      const res = await fetch(WEBHOOK_SEND, {
+      const res = await fetch('/api/gmail-send', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
