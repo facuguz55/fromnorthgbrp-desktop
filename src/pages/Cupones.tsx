@@ -58,19 +58,23 @@ function formatFecha(date: string | null): string {
   });
 }
 
-// ── Fetch all coupons via proxy using since_id pagination ─────────────────────
+// Extracts ?page=N from TN's Link: <url>; rel="next" header
+function parseNextPage(linkHeader: string | null): number | null {
+  if (!linkHeader) return null;
+  const match = linkHeader.match(/<[^>]*[?&]page=(\d+)[^>]*>;\s*rel="next"/);
+  return match ? parseInt(match[1]) : null;
+}
+
+// ── Fetch all coupons via proxy, following Link header pagination ──────────────
 
 async function fetchAllCupones(storeId: string, token: string): Promise<Cupon[]> {
   const all: Cupon[] = [];
-  let sinceId: number | null = null;
+  let page: number | null = 1;
 
-  for (let i = 0; i < 100; i++) {
-    const params: Record<string, string> = {
-      storeId, token, path: 'coupons', per_page: '30',
-    };
-    if (sinceId !== null) params.since_id = String(sinceId);
-
-    const res = await fetch(`/api/tiendanube?${new URLSearchParams(params)}`);
+  while (page !== null && page <= 100) {
+    const res = await fetch(`/api/tiendanube?${new URLSearchParams({
+      storeId, token, path: 'coupons', per_page: '30', page: String(page),
+    })}`);
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
 
     const data = await res.json() as Cupon[];
@@ -78,8 +82,7 @@ async function fetchAllCupones(storeId: string, token: string): Promise<Cupon[]>
 
     all.push(...data);
 
-    if (data.length < 30) break;
-    sinceId = Number(data[data.length - 1].id);
+    page = parseNextPage(res.headers.get('Link'));
   }
 
   return all;
