@@ -5,16 +5,14 @@ import {
 } from 'recharts';
 import {
   RefreshCw, Clock, Users, UserCheck, UserPlus,
-  TrendingUp, ShoppingCart, Package, X, Search, BarChart2,
+  TrendingUp, ShoppingCart, ShoppingBag, Trophy, X, BarChart2,
 } from 'lucide-react';
 import { getSettings } from '../services/dataService';
 import {
   fetchTNMetrics,
   getPersistedMetrics,
-  paymentStatusLabel,
-  paymentStatusClass,
 } from '../services/tiendanubeService';
-import type { TNMetrics, TNOrder } from '../services/tiendanubeService';
+import type { TNMetrics } from '../services/tiendanubeService';
 import '../components/Chart.css';
 import './Analytics.css';
 import './TiendanubeVentas.css';
@@ -82,34 +80,6 @@ const ClientesTooltip = ({ active, payload }: any) => {
   return null;
 };
 
-// ── Orden row ─────────────────────────────────────────────────────────────────
-
-function OrdenRow({ o, i }: { o: TNOrder; i: number }) {
-  const fecha = new Date(o.created_at).toLocaleDateString('es-AR', {
-    day: '2-digit', month: '2-digit', year: '2-digit',
-    hour: '2-digit', minute: '2-digit',
-    timeZone: 'America/Argentina/Buenos_Aires',
-  });
-  return (
-    <tr>
-      <td className="tn-td-num">{i + 1}</td>
-      <td className="tn-td-orden">#{o.number}</td>
-      <td className="tn-td-cliente">
-        <span className="tn-client-name">{o.customer?.name ?? '—'}</span>
-        {o.customer?.email && <span className="tn-client-email">{o.customer.email}</span>}
-      </td>
-      <td className="tn-td-productos">{(o.products ?? []).map(p => p?.name).join(', ') || '—'}</td>
-      <td className="tn-td-total">{fmtARS(parseFloat(o.total))}</td>
-      <td>
-        <span className={`tn-badge ${paymentStatusClass(o.payment_status)}`}>
-          {paymentStatusLabel(o.payment_status)}
-        </span>
-      </td>
-      <td className="tn-td-fecha">{fecha}</td>
-    </tr>
-  );
-}
-
 // ── Component ─────────────────────────────────────────────────────────────────
 
 export default function Analytics() {
@@ -165,38 +135,6 @@ export default function Analytics() {
 
   const [showRecurrentes, setShowRecurrentes] = useState(false);
 
-  // ── Filtros de órdenes ─────────────────────────────────────────────────────
-  const [ordenSearch,        setOrdenSearch]        = useState('');
-  const [ordenStatusFilter,  setOrdenStatusFilter]  = useState<'all' | 'paid' | 'pending' | 'other'>('all');
-
-  const filteredOrders = useMemo(() => {
-    if (!metrics) return [];
-    const q = ordenSearch.toLowerCase();
-    return metrics.orders.filter(o => {
-      // Filtro de búsqueda: nombre, email o número de orden
-      if (q) {
-        const matchCliente = (o.customer?.name?.toLowerCase() ?? '').includes(q)
-          || (o.customer?.email?.toLowerCase() ?? '').includes(q);
-        const matchNumero = String(o.number).includes(q);
-        if (!matchCliente && !matchNumero) return false;
-      }
-      // Filtro de estado
-      if (ordenStatusFilter === 'paid') {
-        return o.payment_status === 'paid' || o.payment_status === 'authorized';
-      }
-      if (ordenStatusFilter === 'pending') {
-        return o.payment_status === 'pending' || o.payment_status === 'unpaid';
-      }
-      if (ordenStatusFilter === 'other') {
-        return o.payment_status !== 'paid'
-          && o.payment_status !== 'authorized'
-          && o.payment_status !== 'pending'
-          && o.payment_status !== 'unpaid';
-      }
-      return true;
-    });
-  }, [metrics, ordenSearch, ordenStatusFilter]);
-
   const recurrentesLista = useMemo(() => {
     if (!metrics) return [];
     const map: Record<string, { nombre: string; email: string; pedidos: number; total: number }> = {};
@@ -214,10 +152,6 @@ export default function Analytics() {
   }, [metrics]);
 
   // ── Análisis de productos por período ────────────────────────────────────────
-  // Unifica variantes de producto eliminando:
-  //   - contenido entre paréntesis: "(BAGGY 1 - 42, BAGGY 5 / 42)", "(Negro, M)", "(40)", etc.
-  //   - patrones de precio: "$65.000"
-  // Ej: "2 BAGGYS X – PROMO LIMITADA (BAGGY 1 - 42 , BAGGY 5 / 42)" → "2 BAGGYS X – PROMO LIMITADA"
   const normalizarProducto = (nombre: string) =>
     nombre
       .replace(/\$[\d.,]+/g, '')
@@ -519,77 +453,88 @@ export default function Analytics() {
         )}
       </section>
 
+      {/* ══ Productos más vendidos + Mejores compradores ═════════════════════ */}
+      {metrics && (
+        <div className="analytics-two-col">
 
-      {/* ══ Últimas órdenes ═════════════════════════════════════════════════ */}
-      {metrics && metrics.orders.length > 0 && (
-        <section className="analytics-section">
-          <div className="section-title-row">
-            <Package size={18} className="section-icon" />
-            <h2>Últimas órdenes</h2>
-          </div>
-          <p className="section-desc">
-            Órdenes más recientes · {fmtNum(metrics.orders.length)} registros cargados.
-          </p>
-
-          {/* ── Filtros de órdenes ── */}
-          <div className="ordenes-filters glass-panel">
-            <div className="ordenes-search-box">
-              <Search size={14} className="ordenes-search-icon" />
-              <input
-                type="text"
-                placeholder="Buscar por cliente, email o Nº de orden..."
-                value={ordenSearch}
-                onChange={e => setOrdenSearch(e.target.value)}
-                className="ordenes-search-input"
-              />
+          {/* ── Productos más vendidos ── */}
+          <section className="analytics-section">
+            <div className="section-title-row">
+              <ShoppingBag size={18} className="section-icon" />
+              <h2>Productos más vendidos</h2>
             </div>
-            <div className="ordenes-status-btns">
-              {([
-                { key: 'all',     label: 'Todos' },
-                { key: 'paid',    label: 'Pagado' },
-                { key: 'pending', label: 'Pendiente' },
-                { key: 'other',   label: 'Cancelado/Otro' },
-              ] as { key: typeof ordenStatusFilter; label: string }[]).map(({ key, label }) => (
-                <button
-                  key={key}
-                  className={`ordenes-status-btn ${ordenStatusFilter === key ? 'active' : ''}`}
-                  onClick={() => setOrdenStatusFilter(key)}
-                >
-                  {label}
-                </button>
-              ))}
-            </div>
-            <span className="ordenes-count-label">
-              {filteredOrders.length} de {metrics.orders.length} órdenes
-            </span>
-          </div>
-
-          <div className="tn-table-wrapper glass-panel">
-            <table className="tn-table">
-              <thead>
-                <tr>
-                  <th>#</th>
-                  <th>Orden</th>
-                  <th>Cliente</th>
-                  <th>Productos</th>
-                  <th>Total</th>
-                  <th>Pago</th>
-                  <th>Fecha</th>
-                </tr>
-              </thead>
-              <tbody>
-                {filteredOrders.map((o, i) => (
-                  <OrdenRow key={o.id} o={o} i={i} />
-                ))}
-              </tbody>
-            </table>
-            {filteredOrders.length === 0 && (
-              <div className="chart-empty" style={{ padding: '2rem' }}>
-                <span>No hay órdenes que coincidan con los filtros</span>
+            <p className="section-desc">Top por unidades vendidas en órdenes pagadas (últimos 90 días).</p>
+            {metrics.topProductos.length > 0 ? (
+              <div className="tn-table-wrapper glass-panel">
+                <table className="tn-table">
+                  <thead>
+                    <tr>
+                      <th>#</th>
+                      <th>Producto</th>
+                      <th>Unidades</th>
+                      <th>Total</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {metrics.topProductos.map((p, i) => (
+                      <tr key={p.nombre}>
+                        <td className="tn-td-num">{i + 1}</td>
+                        <td>{p.nombre}</td>
+                        <td className="prod-analisis-num">{fmtNum(p.cantidad)} uds.</td>
+                        <td className="tn-td-total">{fmtARS(p.total)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            ) : (
+              <div className="glass-panel chart-empty" style={{ padding: '2rem' }}>
+                <span>{loading ? 'Cargando...' : 'Sin datos de productos disponibles'}</span>
               </div>
             )}
-          </div>
-        </section>
+          </section>
+
+          {/* ── Mejores compradores ── */}
+          <section className="analytics-section">
+            <div className="section-title-row">
+              <Trophy size={18} className="section-icon" />
+              <h2>Mejores compradores</h2>
+            </div>
+            <p className="section-desc">Clientes con mayor gasto total en órdenes pagadas (últimos 90 días).</p>
+            {metrics.topCompradores.length > 0 ? (
+              <div className="tn-table-wrapper glass-panel">
+                <table className="tn-table">
+                  <thead>
+                    <tr>
+                      <th>#</th>
+                      <th>Cliente</th>
+                      <th>Pedidos</th>
+                      <th>Total gastado</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {metrics.topCompradores.map((c, i) => (
+                      <tr key={c.email || c.nombre}>
+                        <td className="tn-td-num">{i + 1}</td>
+                        <td className="tn-td-cliente">
+                          <span className="tn-client-name">{c.nombre || c.email || '—'}</span>
+                          {c.nombre && <span className="tn-client-email">{c.email}</span>}
+                        </td>
+                        <td className="prod-analisis-num">{c.pedidos} pedido{c.pedidos !== 1 ? 's' : ''}</td>
+                        <td className="tn-td-total">{fmtARS(c.total)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            ) : (
+              <div className="glass-panel chart-empty" style={{ padding: '2rem' }}>
+                <span>{loading ? 'Cargando...' : 'Sin datos de compradores disponibles'}</span>
+              </div>
+            )}
+          </section>
+
+        </div>
       )}
 
       {/* ══ Análisis de productos ════════════════════════════════════════════ */}
