@@ -1166,21 +1166,6 @@ function formatFecha(date: string | null): string {
   });
 }
 
-function normalizeCupones(raw: unknown): Cupon[] {
-  if (Array.isArray(raw)) {
-    if (raw.length > 0 && raw[0] !== null && typeof raw[0] === 'object' && 'json' in (raw[0] as object)) {
-      return normalizeCupones((raw as { json: unknown }[])[0].json);
-    }
-    return raw as Cupon[];
-  }
-  if (raw !== null && typeof raw === 'object') {
-    const obj = raw as Record<string, unknown>;
-    for (const key of ['cupones', 'coupons', 'data', 'result', 'items']) {
-      if (Array.isArray(obj[key])) return obj[key] as Cupon[];
-    }
-  }
-  return [];
-}
 
 function TipoIcon({ type }: { type: TipoDescuento }) {
   if (type === 'percentage') return <Percent size={13} />;
