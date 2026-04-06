@@ -2,6 +2,7 @@ import { useState, useEffect, useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import MetricCard from '../components/MetricCard';
 import SalesChart from '../components/SalesChart';
+import MonthSelector from '../components/MonthSelector';
 import {
   RefreshCw, DollarSign, Activity, CalendarDays,
   ShoppingCart, Store, UserCheck, MousePointerClick, Users, X,
@@ -11,6 +12,7 @@ import { fetchTNMetrics, clearTNCache, getPersistedMetrics, paymentStatusLabel }
 import type { TNMetrics } from '../services/tiendanubeService';
 import { fetchMetaSpendByDay } from '../services/metaAdsService';
 import type { MetaDailySpend } from '../services/metaAdsService';
+import { useMonth } from '../context/MonthContext';
 
 const GID_CLICKS       = '1982854970';
 const GID_CONVERTIDOS  = '11747759';
@@ -69,7 +71,9 @@ export default function Dashboard() {
   const [convertidosCount, setConvertidosCount]     = useState<number | null>(null);
   const [showRecurrentes, setShowRecurrentes]       = useState(false);
   const [metaByDay, setMetaByDay]                   = useState<MetaDailySpend[]>([]);
-  const [selectedMonthKey, setSelectedMonthKey]     = useState(getCurrentMonthKeyAR);
+
+  const { selectedMonth, setSelectedMonth } = useMonth();
+  const selectedMonthKey = `${selectedMonth.year}-${String(selectedMonth.month).padStart(2, '0')}`;
 
   const currentMonthKey = useMemo(getCurrentMonthKeyAR, []);
   const isCurrentMonth  = selectedMonthKey === currentMonthKey;
@@ -87,10 +91,11 @@ export default function Dashboard() {
     return [...monthSet].sort().reverse();
   }, [metrics]);
 
-  // Si el mes actual no tiene órdenes, seleccionar el mes más reciente disponible
+  // Si el mes seleccionado no tiene datos, seleccionar el mes más reciente disponible
   useEffect(() => {
     if (availableMonths.length > 0 && !availableMonths.includes(selectedMonthKey)) {
-      setSelectedMonthKey(availableMonths[0]);
+      const [y, m] = availableMonths[0].split('-').map(Number);
+      setSelectedMonth({ month: m, year: y });
     }
   }, [availableMonths]);
 
@@ -247,29 +252,8 @@ export default function Dashboard() {
       )}
 
       {/* ── Filtro de meses ── */}
-      {metrics && availableMonths.length > 0 && (
-        <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', marginBottom: '0.25rem' }}>
-          {availableMonths.map(key => (
-            <button
-              key={key}
-              onClick={() => setSelectedMonthKey(key)}
-              style={{
-                padding: '0.35rem 0.9rem',
-                borderRadius: '999px',
-                border: '1px solid',
-                borderColor: key === selectedMonthKey ? 'var(--accent-primary)' : 'var(--border-color)',
-                background: key === selectedMonthKey ? 'rgba(6,182,212,0.12)' : 'transparent',
-                color: key === selectedMonthKey ? 'var(--accent-primary)' : 'var(--text-muted)',
-                fontSize: '0.8rem',
-                fontWeight: key === selectedMonthKey ? 600 : 400,
-                cursor: 'pointer',
-                transition: 'border-color 0.15s, color 0.15s, background 0.15s',
-              }}
-            >
-              {monthLabel(key)}
-            </button>
-          ))}
-        </div>
+      {metrics && (
+        <MonthSelector availableMonths={availableMonths} />
       )}
 
       {/* ── Bloques 1 + 2: métricas del mes ── */}

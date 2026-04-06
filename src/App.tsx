@@ -1,6 +1,7 @@
 import { useEffect, useRef, type ReactNode } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider, useAuth } from './context/AuthContext';
+import { MonthProvider } from './context/MonthContext';
 import Sidebar from './components/Sidebar';
 import AiChat from './components/AiChat';
 import Dashboard from './pages/Dashboard';
@@ -159,8 +160,10 @@ function App() {
   return (
     <Router>
       <AuthProvider>
-        <ThemeApplier />
-        <AppShell />
+        <MonthProvider>
+          <ThemeApplier />
+          <AppShell />
+        </MonthProvider>
       </AuthProvider>
     </Router>
   );

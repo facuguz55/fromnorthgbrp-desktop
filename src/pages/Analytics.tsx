@@ -11,8 +11,11 @@ import { getSettings } from '../services/dataService';
 import {
   fetchTNMetrics,
   getPersistedMetrics,
+  humanizePaymentMethod,
 } from '../services/tiendanubeService';
 import type { TNMetrics } from '../services/tiendanubeService';
+import { useMonth } from '../context/MonthContext';
+import MonthSelector from '../components/MonthSelector';
 import '../components/Chart.css';
 import './Analytics.css';
 import './TiendanubeVentas.css';
@@ -29,6 +32,9 @@ const fmtARS = (n: number) =>
 
 const fmtNum = (n: number) =>
   n.toLocaleString('es-AR', { maximumFractionDigits: 0 });
+
+const MESES = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
+const AR_OFFSET = -3 * 60 * 60 * 1000;
 
 // ── Tooltips ──────────────────────────────────────────────────────────────────
 
@@ -89,6 +95,10 @@ export default function Analytics() {
   const [lastRefreshed, setLastRefreshed] = useState<Date>(new Date());
   const [metrics, setMetrics]           = useState<TNMetrics | null>(persisted);
 
+  const { selectedMonth } = useMonth();
+  const selectedMonthKey = `${selectedMonth.year}-${String(selectedMonth.month).padStart(2, '0')}`;
+  const monthLabel = `${MESES[selectedMonth.month - 1]} ${selectedMonth.year}`;
+
   const fetchData = async () => {
     const hasCached = !!getPersistedMetrics();
     if (hasCached) setSyncing(true); else setLoading(true);
@@ -110,36 +120,132 @@ export default function Analytics() {
 
   useEffect(() => { fetchData(); }, []);
 
-  const metodosConColor: MetodoPago[] = (metrics?.metodosPago ?? []).map((m, i) => ({
-    ...m,
-    color: PALETTE[i % PALETTE.length],
-  }));
+  // ── Available months ──────────────────────────────────────────────────────
+  const availableMonths = useMemo(() => {
+    if (!metrics) return [];
+    const monthSet = new Set<string>();
+    for (const o of metrics.orders) {
+      const d = new Date(new Date(o.created_at).getTime() + AR_OFFSET);
+      monthSet.add(`${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}`);
+    }
+    return [...monthSet].sort().reverse();
+  }, [metrics]);
 
-  const diasRecientes = metrics?.ventasPorDia.slice(-30) ?? [];
+  // ── Month-filtered orders (paid/authorized only) ───────────────────────────
+  const monthOrders = useMemo(() => {
+    if (!metrics) return [];
+    return metrics.orders.filter(o => {
+      if (o.payment_status !== 'paid' && o.payment_status !== 'authorized') return false;
+      const d = new Date(new Date(o.created_at).getTime() + AR_OFFSET);
+      const key = `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}`;
+      return key === selectedMonthKey;
+    });
+  }, [metrics, selectedMonthKey]);
 
-  const top3Horas = [...(metrics?.ventasPorHora ?? [])]
-    .sort((a, b) => b.value - a.value)
-    .slice(0, 3);
+  // ── Daily chart filtered to selected month ────────────────────────────────
+  const diasRecientes = useMemo(() => {
+    if (!metrics) return [];
+    const [selYear, selMonth] = selectedMonthKey.split('-').map(Number);
+    return metrics.ventasPorDia.filter(d => {
+      const parts = d.name.split('/');
+      if (parts.length !== 3) return false;
+      return parseInt(parts[1]) === selMonth && parseInt(parts[2]) === selYear;
+    });
+  }, [metrics, selectedMonthKey]);
 
-  const totalClientes      = (metrics?.clientesNuevos ?? 0) + (metrics?.clientesRecurrentes ?? 0);
-  const pctNuevos          = totalClientes > 0 ? Math.round(((metrics?.clientesNuevos ?? 0) / totalClientes) * 100) : 0;
-  const pctRecurrentes     = totalClientes > 0 ? Math.round(((metrics?.clientesRecurrentes ?? 0) / totalClientes) * 100) : 0;
+  // ── Methods from monthOrders ──────────────────────────────────────────────
+  const metodosConColor = useMemo((): MetodoPago[] => {
+    const metodoMap: Record<string, number> = {};
+    for (const o of monthOrders) {
+      const method = humanizePaymentMethod(
+        o.payment_details?.method ?? 'other',
+        o.payment_details?.credit_card_company,
+      );
+      metodoMap[method] = (metodoMap[method] ?? 0) + 1;
+    }
+    const total = Object.values(metodoMap).reduce((s, v) => s + v, 0);
+    return Object.entries(metodoMap)
+      .sort((a, b) => b[1] - a[1])
+      .map(([name, value], i) => ({
+        name, value,
+        porcentaje: total > 0 ? Math.round((value / total) * 100) : 0,
+        color: PALETTE[i % PALETTE.length],
+      }));
+  }, [monthOrders]);
+
+  // ── Clients from monthOrders ──────────────────────────────────────────────
+  const { monthClientesNuevos, monthClientesRecurrentes } = useMemo(() => {
+    const map: Record<string, number> = {};
+    for (const o of monthOrders) {
+      const key = o.customer?.email || o.customer?.name || '';
+      if (!key) continue;
+      map[key] = (map[key] ?? 0) + 1;
+    }
+    let monthClientesNuevos = 0, monthClientesRecurrentes = 0;
+    for (const cnt of Object.values(map)) {
+      if (cnt === 1) monthClientesNuevos++; else monthClientesRecurrentes++;
+    }
+    return { monthClientesNuevos, monthClientesRecurrentes };
+  }, [monthOrders]);
+
+  const totalClientes      = monthClientesNuevos + monthClientesRecurrentes;
+  const pctNuevos          = totalClientes > 0 ? Math.round((monthClientesNuevos / totalClientes) * 100) : 0;
+  const pctRecurrentes     = totalClientes > 0 ? Math.round((monthClientesRecurrentes / totalClientes) * 100) : 0;
   const clientesPieData    = [
-    { name: 'Nuevos',      value: metrics?.clientesNuevos      ?? 0 },
-    { name: 'Recurrentes', value: metrics?.clientesRecurrentes ?? 0 },
+    { name: 'Nuevos',      value: monthClientesNuevos },
+    { name: 'Recurrentes', value: monthClientesRecurrentes },
   ];
 
-  const hasHoras    = (metrics?.ventasPorHora ?? []).some(h => h.value > 0);
+  // ── Hours from monthOrders ────────────────────────────────────────────────
+  const monthVentasPorHora = useMemo(() => {
+    const horaMap: Record<number, number> = {};
+    for (const o of monthOrders) {
+      const horaAR = new Date(new Date(o.created_at).toLocaleString('en-US', { timeZone: 'America/Argentina/Buenos_Aires' })).getHours();
+      horaMap[horaAR] = (horaMap[horaAR] ?? 0) + 1;
+    }
+    return Array.from({ length: 24 }, (_, h) => ({
+      name: `${String(h).padStart(2, '00')}:00`,
+      value: horaMap[h] ?? 0,
+    }));
+  }, [monthOrders]);
+
+  const top3Horas = [...monthVentasPorHora].sort((a, b) => b.value - a.value).slice(0, 3);
+
+  // ── Top products from monthOrders ─────────────────────────────────────────
+  const monthTopProductos = useMemo(() => {
+    const map: Record<string, { nombre: string; cantidad: number; total: number }> = {};
+    for (const o of monthOrders) {
+      for (const p of o.products) {
+        if (!map[p.name]) map[p.name] = { nombre: p.name, cantidad: 0, total: 0 };
+        map[p.name].cantidad += p.quantity;
+        map[p.name].total += parseFloat(p.price) * p.quantity;
+      }
+    }
+    return Object.values(map).sort((a, b) => b.cantidad - a.cantidad).slice(0, 6);
+  }, [monthOrders]);
+
+  // ── Top buyers from monthOrders ───────────────────────────────────────────
+  const monthTopCompradores = useMemo(() => {
+    const map: Record<string, { nombre: string; email: string; total: number; pedidos: number }> = {};
+    for (const o of monthOrders) {
+      const key = o.customer?.email || o.customer?.name || '';
+      if (!key) continue;
+      if (!map[key]) map[key] = { nombre: o.customer?.name ?? '', email: o.customer?.email ?? '', total: 0, pedidos: 0 };
+      map[key].total += parseFloat(o.total);
+      map[key].pedidos++;
+    }
+    return Object.values(map).sort((a, b) => b.total - a.total).slice(0, 5);
+  }, [monthOrders]);
+
+  const hasHoras    = monthVentasPorHora.some(h => h.value > 0);
   const hasMetodos  = metodosConColor.length > 0;
   const hasClientes = totalClientes > 0;
 
   const [showRecurrentes, setShowRecurrentes] = useState(false);
 
   const recurrentesLista = useMemo(() => {
-    if (!metrics) return [];
     const map: Record<string, { nombre: string; email: string; pedidos: number; total: number }> = {};
-    for (const o of metrics.orders) {
-      if (o.payment_status !== 'paid' && o.payment_status !== 'authorized') continue;
+    for (const o of monthOrders) {
       const email  = o.customer?.email ?? '';
       const nombre = o.customer?.name  ?? '';
       const key    = email || nombre;
@@ -149,9 +255,9 @@ export default function Analytics() {
       map[key].total += parseFloat(o.total);
     }
     return Object.values(map).filter(c => c.pedidos > 1).sort((a, b) => b.pedidos - a.pedidos);
-  }, [metrics]);
+  }, [monthOrders]);
 
-  // ── Análisis de productos por período ────────────────────────────────────────
+  // ── Análisis de productos por período (rolling, independiente del mes) ────
   const normalizarProducto = (nombre: string) =>
     nombre
       .replace(/\$[\d.,]+/g, '')
@@ -193,7 +299,7 @@ export default function Analytics() {
         <div>
           <h1>Análisis de Ventas</h1>
           <span className="text-muted analytics-meta">
-            Últimos 90 días · Actualizado: {lastRefreshed.toLocaleTimeString('es-AR')}
+            {monthLabel} · Actualizado: {lastRefreshed.toLocaleTimeString('es-AR')}
           </span>
         </div>
         <button className="btn-secondary refresh-btn" onClick={fetchData} disabled={loading || syncing}>
@@ -202,13 +308,15 @@ export default function Analytics() {
         </button>
       </header>
 
+      <MonthSelector availableMonths={availableMonths} />
+
       {/* ══ Facturación diaria ══════════════════════════════════════════════ */}
       <section className="analytics-section">
         <div className="section-title-row">
           <TrendingUp size={18} className="section-icon" />
           <h2>Facturación diaria</h2>
         </div>
-        <p className="section-desc">Ingresos diarios de órdenes pagadas (últimos 30 días).</p>
+        <p className="section-desc">Ingresos diarios de órdenes pagadas en {monthLabel}.</p>
         <div className="chart-container glass-panel analytics-chart-tall">
           <div className="chart-header">
             <div className="chart-header-row">
@@ -259,7 +367,7 @@ export default function Analytics() {
             <ShoppingCart size={18} className="section-icon" />
             <h2>Métodos de pago</h2>
           </div>
-          <p className="section-desc">Distribución de medios de pago en órdenes pagadas.</p>
+          <p className="section-desc">Distribución de medios de pago en {monthLabel}.</p>
           <div className="chart-container glass-panel analytics-chart-pie">
             <div className="chart-header">
               <div className="chart-header-row">
@@ -320,7 +428,7 @@ export default function Analytics() {
             <Users size={18} className="section-icon" />
             <h2>Clientes nuevos vs recurrentes</h2>
           </div>
-          <p className="section-desc">Clientes que compraron una sola vez (nuevos) vs. más de una vez (recurrentes).</p>
+          <p className="section-desc">Compradores únicos (nuevos) vs. que repitieron en {monthLabel}.</p>
           <div className="chart-container glass-panel analytics-chart-pie">
             <div className="chart-header">
               <div className="chart-header-row">
@@ -334,7 +442,7 @@ export default function Analytics() {
                 <div className="clientes-stats-row">
                   <div className="cliente-stat-card">
                     <UserPlus size={20} className="cliente-stat-icon nuevos" />
-                    <span className="cliente-stat-num">{metrics?.clientesNuevos ?? 0}</span>
+                    <span className="cliente-stat-num">{monthClientesNuevos}</span>
                     <span className="cliente-stat-label">Nuevos</span>
                     <span className="cliente-stat-pct nuevos-pct">{pctNuevos}%</span>
                   </div>
@@ -345,7 +453,7 @@ export default function Analytics() {
                     style={{ cursor: 'pointer' }}
                   >
                     <UserCheck size={20} className="cliente-stat-icon recurrentes" />
-                    <span className="cliente-stat-num">{metrics?.clientesRecurrentes ?? 0}</span>
+                    <span className="cliente-stat-num">{monthClientesRecurrentes}</span>
                     <span className="cliente-stat-label">Recurrentes</span>
                     <span className="cliente-stat-pct recurrentes-pct">{pctRecurrentes}%</span>
                     <span style={{ fontSize: '0.62rem', color: 'var(--accent-primary)', marginTop: '0.1rem' }}>Ver lista →</span>
@@ -404,7 +512,7 @@ export default function Analytics() {
           {hasHoras ? (
             <div className="chart-wrapper">
               <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={metrics?.ventasPorHora} margin={{ top: 8, right: 12, left: 0, bottom: 0 }}>
+                <BarChart data={monthVentasPorHora} margin={{ top: 8, right: 12, left: 0, bottom: 0 }}>
                   <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.04)" vertical={false} />
                   <XAxis
                     dataKey="name"
@@ -424,7 +532,7 @@ export default function Analytics() {
                   />
                   <Tooltip content={<HourTooltip />} cursor={{ fill: 'rgba(6,182,212,0.06)' }} />
                   <Bar dataKey="value" radius={[4, 4, 0, 0]}>
-                    {(metrics?.ventasPorHora ?? []).map((entry, index) => (
+                    {monthVentasPorHora.map((entry, index) => (
                       <Cell
                         key={`cell-${index}`}
                         fill={top3Horas.some(t => t.name === entry.name) ? '#06b6d4' : 'rgba(6,182,212,0.3)'}
@@ -463,8 +571,8 @@ export default function Analytics() {
               <ShoppingBag size={18} className="section-icon" />
               <h2>Productos más vendidos</h2>
             </div>
-            <p className="section-desc">Top por unidades vendidas en órdenes pagadas (últimos 90 días).</p>
-            {metrics.topProductos.length > 0 ? (
+            <p className="section-desc">Top por unidades vendidas en {monthLabel}.</p>
+            {monthTopProductos.length > 0 ? (
               <div className="tn-table-wrapper glass-panel">
                 <table className="tn-table">
                   <thead>
@@ -476,7 +584,7 @@ export default function Analytics() {
                     </tr>
                   </thead>
                   <tbody>
-                    {metrics.topProductos.map((p, i) => (
+                    {monthTopProductos.map((p, i) => (
                       <tr key={p.nombre}>
                         <td className="tn-td-num">{i + 1}</td>
                         <td>{p.nombre}</td>
@@ -500,8 +608,8 @@ export default function Analytics() {
               <Trophy size={18} className="section-icon" />
               <h2>Mejores compradores</h2>
             </div>
-            <p className="section-desc">Clientes con mayor gasto total en órdenes pagadas (últimos 90 días).</p>
-            {metrics.topCompradores.length > 0 ? (
+            <p className="section-desc">Clientes con mayor gasto total en {monthLabel}.</p>
+            {monthTopCompradores.length > 0 ? (
               <div className="tn-table-wrapper glass-panel">
                 <table className="tn-table">
                   <thead>
@@ -513,7 +621,7 @@ export default function Analytics() {
                     </tr>
                   </thead>
                   <tbody>
-                    {metrics.topCompradores.map((c, i) => (
+                    {monthTopCompradores.map((c, i) => (
                       <tr key={c.email || c.nombre}>
                         <td className="tn-td-num">{i + 1}</td>
                         <td className="tn-td-cliente">
@@ -594,7 +702,7 @@ export default function Analytics() {
               </button>
             </div>
             <p className="section-desc" style={{ margin: '0.25rem 0 1rem' }}>
-              Clientes con más de una compra en los últimos 90 días, ordenados por cantidad de pedidos.
+              Clientes con más de una compra en {monthLabel}, ordenados por cantidad de pedidos.
             </p>
             {recurrentesLista.length === 0 ? (
               <div className="chart-empty"><span>Sin clientes recurrentes en este período</span></div>

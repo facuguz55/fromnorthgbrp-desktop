@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { RefreshCw } from 'lucide-react';
 import { getSettings } from '../services/dataService';
 import { fetchTNMetrics, getPersistedMetrics } from '../services/tiendanubeService';
+import { useMonth } from '../context/MonthContext';
 import SalesCalendarDetail from '../components/SalesCalendarDetail';
 
 export default function Calendar() {
@@ -9,6 +10,8 @@ export default function Calendar() {
   const [loading, setLoading] = useState(!persisted);
   const [ventasPorDia, setVentasPorDia] = useState<{ name: string; value: number }[]>(persisted?.ventasPorDia ?? []);
   const [lastRefreshed, setLastRefreshed] = useState<Date>(new Date());
+
+  const { selectedMonth } = useMonth();
 
   const fetchData = async () => {
     const hasCached = !!getPersistedMetrics();
@@ -51,7 +54,12 @@ export default function Calendar() {
           <div className="loading-spinner" />
         </div>
       ) : (
-        <SalesCalendarDetail ventasPorDia={ventasPorDia} />
+        <SalesCalendarDetail
+          key={`${selectedMonth.year}-${selectedMonth.month}`}
+          ventasPorDia={ventasPorDia}
+          initialYear={selectedMonth.year}
+          initialMonth={selectedMonth.month - 1}
+        />
       )}
     </div>
   );

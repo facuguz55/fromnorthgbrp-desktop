@@ -4,6 +4,8 @@ import './SalesCalendarDetail.css';
 
 interface Props {
   ventasPorDia: { name: string; value: number }[];
+  initialMonth?: number;
+  initialYear?: number;
 }
 
 const DAYS_ES   = ['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom'];
@@ -96,10 +98,10 @@ function MonthGrid({ year, month, salesMap, maxValue, today }: MonthGridProps) {
   );
 }
 
-export default function SalesCalendarDetail({ ventasPorDia }: Props) {
+export default function SalesCalendarDetail({ ventasPorDia, initialMonth, initialYear }: Props) {
   const today = new Date();
-  const [viewYear,  setViewYear]  = useState(today.getFullYear());
-  const [viewMonth, setViewMonth] = useState(today.getMonth());
+  const [viewYear,  setViewYear]  = useState(initialYear  ?? today.getFullYear());
+  const [viewMonth, setViewMonth] = useState(initialMonth ?? today.getMonth());
 
   // Previous month
   const prevYear  = viewMonth === 0 ? viewYear - 1 : viewYear;
