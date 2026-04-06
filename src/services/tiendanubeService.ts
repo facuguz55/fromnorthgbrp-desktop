@@ -330,14 +330,13 @@ async function fetchOrdersAll(
   token: string,
   onProgress?: (n: number) => void,
 ): Promise<TNOrder[]> {
-  const since = new Date(Date.now() - DAYS_BACK * 86_400_000).toISOString();
   const all: TNOrder[] = [];
 
   for (let page = 1; page <= MAX_PAGES; page++) {
     const { data, hasMore } = await tnFetch(storeId, token, 'orders', {
       per_page: '200',
       page: String(page),
-      created_at_min: since,
+      created_at_min: new Date(Date.now() - DAYS_BACK * 86_400_000).toISOString(),
     });
     all.push(...(data as TNOrder[]));
     onProgress?.(all.length);
