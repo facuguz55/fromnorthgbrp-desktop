@@ -445,10 +445,10 @@ async function executeTool(name: string, input: Record<string, any>): Promise<st
           return JSON.stringify({ total: simplified.length, orders: simplified });
         }
 
-        // Paginación automática: seguir pidiendo hasta que una página devuelva menos de 200
+        // Paginación automática: máx 3 páginas para no explotar el contexto
         const allOrders: any[] = [];
         let page = 1;
-        while (page <= 20) { // máx 20 páginas = 4000 órdenes
+        while (page <= 3) {
           const res = await tnFetch('orders', { ...baseParams, page: String(page) });
           const data = await res.json() as any[];
           if (!Array.isArray(data) || data.length === 0) break;
@@ -682,8 +682,8 @@ export default async function handler(req: Request): Promise<Response> {
       return {
         ...msg,
         content: msg.content.map((block: any) => {
-          if (block.type === 'tool_result' && typeof block.content === 'string' && block.content.length > 8000) {
-            return { ...block, content: block.content.slice(0, 8000) + '\n[...resultado truncado para ahorrar tokens]' };
+          if (block.type === 'tool_result' && typeof block.content === 'string' && block.content.length > 3000) {
+            return { ...block, content: block.content.slice(0, 3000) + '\n[...resultado truncado para ahorrar tokens]' };
           }
           return block;
         }),
@@ -693,9 +693,9 @@ export default async function handler(req: Request): Promise<Response> {
 
   // Mantener solo los últimos 20 mensajes para no superar el límite de contexto
   const trimHistory = (msgs: any[]): any[] => {
-    if (msgs.length <= 20) return msgs;
-    // Siempre incluir el primero (contexto inicial del usuario) + los últimos 19
-    return [msgs[0], ...msgs.slice(-19)];
+    if (msgs.length <= 10) return msgs;
+    // Siempre incluir el primero (contexto inicial del usuario) + los últimos 9
+    return [msgs[0], ...msgs.slice(-9)];
   };
 
   const allMessages: any[] = truncateMessages(trimHistory([...body.messages]));
@@ -799,7 +799,10 @@ export default async function handler(req: Request): Promise<Response> {
             const toolUseBlocks = assistantContent.filter(b => b.type === 'tool_use');
             const results: any[] = [];
             for (const tool of toolUseBlocks) {
-              const result = await executeTool(tool.name, tool.input ?? {});
+              const rawResult = await executeTool(tool.name, tool.input ?? {});
+              const result = typeof rawResult === 'string' && rawResult.length > 4000
+                ? rawResult.slice(0, 4000) + '\n[...truncado para ahorrar contexto]'
+                : rawResult;
               results.push({ type: 'tool_result', tool_use_id: tool.id, content: result });
             }
             allMessages.push({ role: 'user', content: results });
