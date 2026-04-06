@@ -9,7 +9,6 @@ import Analytics from './pages/Analytics';
 import Settings from './pages/Settings';
 import Workflows from './pages/Workflows';
 import Alerts from './pages/Alerts';
-import Calendar from './pages/Calendar';
 import Ruleta from './pages/Ruleta';
 import SeguimientosEnviados from './pages/SeguimientosEnviados';
 import SheetViewer from './pages/SheetViewer';
@@ -23,7 +22,7 @@ import { getSettings, META_ACCOUNTS } from './services/dataService';
 import { fetchMetaInsights, generateMetaAlerts } from './services/metaAdsService';
 import './App.css';
 
-// ── Background poller: chequea alertas críticas de Meta Ads cada 15 min ───────
+// ── Background poller: chequea alertas críticas de Meta Ads cada 15 min ───────────
 const POLL_MS = 15 * 60 * 1000;
 
 function useMetaAlertPoller() {
@@ -135,7 +134,6 @@ function AppShell() {
           <Route path="/analytics" element={<ProtectedRoute><Analytics /></ProtectedRoute>} />
           <Route path="/workflows" element={<ProtectedRoute><Workflows /></ProtectedRoute>} />
           <Route path="/alerts"    element={<ProtectedRoute><Alerts /></ProtectedRoute>} />
-          <Route path="/calendar"  element={<ProtectedRoute><Calendar /></ProtectedRoute>} />
           <Route path="/stock"     element={<Navigate to="/tienda" replace />} />
           <Route path="/ruleta"    element={<ProtectedRoute><Ruleta /></ProtectedRoute>} />
           <Route path="/seguimientos-enviados" element={<ProtectedRoute><SeguimientosEnviados /></ProtectedRoute>} />

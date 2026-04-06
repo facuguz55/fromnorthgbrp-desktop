@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { NavLink, useNavigate, useLocation } from 'react-router-dom';
-import { LayoutDashboard, Settings, PieChart, BarChart2, Bell, Lock, CalendarDays, Dices, Inbox, Store, Megaphone } from 'lucide-react';
+import { LayoutDashboard, Settings, PieChart, BarChart2, Bell, Lock, Dices, Inbox, Store, Megaphone } from 'lucide-react';
 import {
   META_ACCOUNTS, getActiveMetaAccount, setActiveMetaAccount,
 } from '../services/dataService';
@@ -95,12 +95,6 @@ export default function Sidebar() {
 
           {/* ── Gestión ── */}
           <li className="nav-group-label">Gestión</li>
-          <li className="nav-item">
-            <NavLink to="/calendar" className={({ isActive }) => `nav-link ${isActive ? 'active' : ''}`}>
-              <CalendarDays size={20} />
-              <span>Calendario</span>
-            </NavLink>
-          </li>
           <li className="nav-item">
             <NavLink to="/mails" className={({ isActive }) => `nav-link ${isActive ? 'active' : ''}`}>
               <Inbox size={20} />
