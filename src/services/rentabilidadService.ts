@@ -1,7 +1,7 @@
 import { fetchMetaInsightsByDateRange } from './metaAdsService';
 import { getSettings, META_ACCOUNTS } from './dataService';
 
-// ── Constantes de negocio ─────────────────────────────────────────────────────
+// ── Constantes de negocio ───────────────────────────────────────────────
 
 export const PRECIO_PROMO_A       = 69_000;
 export const PRECIO_PROMO_B       = 99_000;
@@ -12,12 +12,11 @@ const COSTO_UNIDAD_PROMO_B        = 18_471;
 const COSTO_ENVIO_POR_PROMO       = 9_000;
 const COSTO_AGENCIA_POR_PROMO     = 2_000;
 export const TICKET_PROMEDIO_REF  = 84_000;
-const PRECIO_TOLERANCE            = 500;
 
 const COSTO_MERCH_PROMO_A = PANTALONES_PROMO_A * COSTO_UNIDAD_PROMO_A; // 33600
 const COSTO_MERCH_PROMO_B = PANTALONES_PROMO_B * COSTO_UNIDAD_PROMO_B; // 55413
 
-// ── Types ─────────────────────────────────────────────────────────────────────
+// ── Types ─────────────────────────────────────────────────────────
 
 export interface DiaRentabilidad {
   fecha: string;
@@ -61,7 +60,7 @@ export interface ResumenRentabilidad {
   ticketPromedioRef: number;
 }
 
-// ── Helpers ───────────────────────────────────────────────────────────────────
+// ── Helpers ─────────────────────────────────────────────────────────
 
 const AR_OFFSET = -3 * 60 * 60 * 1000;
 
@@ -104,9 +103,14 @@ function getMonthRange(refISO: string): { since: string; until: string } {
   return { since, until };
 }
 
-function detectPromo(total: number): 'A' | 'B' | null {
-  if (Math.abs(total - PRECIO_PROMO_A) <= PRECIO_TOLERANCE) return 'A';
-  if (Math.abs(total - PRECIO_PROMO_B) <= PRECIO_TOLERANCE) return 'B';
+import type { TNOrder, TNProduct } from './tiendanubeService';
+
+function detectPromo(products: TNProduct[]): 'A' | 'B' | null {
+  for (const p of products) {
+    const name = p.name.toUpperCase();
+    if (name.includes('2 BAGGY')) return 'A';
+    if (name.includes('3 BAGGY')) return 'B';
+  }
   return null;
 }
 
@@ -130,7 +134,7 @@ function daysInRange(since: string, until: string): string[] {
   return days;
 }
 
-// ── USDT price ────────────────────────────────────────────────────────────────
+// ── USDT price ──────────────────────────────────────────────────────
 
 const USDT_CACHE_KEY = 'usdt_price_cache';
 
@@ -149,7 +153,7 @@ export async function fetchUSDTPrice(): Promise<{ price: number; error: boolean 
   }
 }
 
-// ── Meta Ads aggregation ──────────────────────────────────────────────────────
+// ── Meta Ads aggregation ────────────────────────────────────────────
 
 async function fetchMetaSpendByDay(
   since: string,
@@ -179,9 +183,7 @@ async function fetchMetaSpendByDay(
   return spendByDay;
 }
 
-// ── Main computation ──────────────────────────────────────────────────────────
-
-import type { TNOrder } from './tiendanubeService';
+// ── Main computation ────────────────────────────────────────────────
 
 function buildDia(
   fechaISO: string,
@@ -194,7 +196,7 @@ function buildDia(
 
   for (const o of orders) {
     if (o.payment_status !== 'paid' && o.payment_status !== 'authorized') continue;
-    const promo = detectPromo(parseFloat(o.total));
+    const promo = detectPromo(o.products);
     if (!promo) continue;
     if (promo === 'A') promoA++;
     else promoB++;
@@ -270,7 +272,7 @@ function buildResumen(dias: DiaRentabilidad[]): ResumenRentabilidad {
   };
 }
 
-// ── Exported fetch functions ──────────────────────────────────────────────────
+// ── Exported fetch functions ────────────────────────────────────────────
 
 function filterOrdersByDay(orders: TNOrder[], fechaISO: string): TNOrder[] {
   const [y, m, d] = fechaISO.split('-').map(Number);
