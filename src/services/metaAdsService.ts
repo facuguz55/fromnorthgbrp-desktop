@@ -1,6 +1,6 @@
 const GRAPH_API = 'https://graph.facebook.com/v19.0';
 
-// ── Types ──────────────────────────────────────────────────────────────────────
+// ── Types ──────────────────────────────────────────────────────
 
 export type MetaStatus = 'ACTIVE' | 'PAUSED' | 'ARCHIVED' | 'DELETED';
 export type DatePreset =
@@ -53,7 +53,7 @@ export interface MetaAlert {
   value: number;
 }
 
-// ── Helpers ────────────────────────────────────────────────────────────────────
+// ── Helpers ────────────────────────────────────────────────────
 
 async function metaGet<T>(path: string, token: string, params: Record<string, string> = {}): Promise<T> {
   const qs = new URLSearchParams({ ...params, access_token: token });
@@ -67,7 +67,7 @@ function extractAction(actions: { action_type: string; value: string }[] | undef
   return parseFloat(actions?.find(a => a.action_type === type)?.value ?? '0') || 0;
 }
 
-// ── Campaigns ──────────────────────────────────────────────────────────────────
+// ── Campaigns ───────────────────────────────────────────────────
 
 export async function fetchMetaCampaigns(token: string, accountId: string): Promise<MetaCampaign[]> {
   const accountFmt = accountId.startsWith('act_') ? accountId : `act_${accountId}`;
@@ -83,7 +83,7 @@ export async function fetchMetaCampaigns(token: string, accountId: string): Prom
   return result.data ?? [];
 }
 
-// ── Insights ───────────────────────────────────────────────────────────────────
+// ── Insights ─────────────────────────────────────────────────────
 
 interface RawInsight {
   campaign_id?: string;
@@ -154,22 +154,31 @@ export async function fetchMetaInsightsByDateRange(
   level: 'campaign' | 'adset' | 'ad' = 'campaign',
 ): Promise<MetaInsight[]> {
   const accountFmt = accountId.startsWith('act_') ? accountId : `act_${accountId}`;
-  const result = await metaGet<{ data: RawInsight[] }>(
-    `/${accountFmt}/insights`,
-    token,
-    {
-      fields: 'campaign_id,campaign_name,spend,impressions,clicks,ctr,reach,frequency,actions,action_values,date_start,date_stop',
-      time_range: JSON.stringify({ since, until }),
-      time_increment: '1',
-      level,
-      effective_status: `["ACTIVE","PAUSED","ARCHIVED"]`,
-      limit: '200',
-    },
-  );
-  return (result.data ?? []).map(mapRawInsight);
+
+  const fields = 'campaign_id,campaign_name,spend,impressions,clicks,ctr,reach,frequency,actions,action_values,date_start,date_stop';
+
+  // time_range y time_increment NO se pasan por URLSearchParams porque Meta
+  // requiere que time_range sea un JSON literal en la URL, no double-encodeado.
+  const qs = new URLSearchParams({
+    fields,
+    level,
+    effective_status: '["ACTIVE","PAUSED","ARCHIVED"]',
+    limit: '200',
+    time_increment: '1',
+    access_token: token,
+  });
+
+  // Agregar time_range como string literal al final, sin re-encodear
+  const url = `${GRAPH_API}/${accountFmt}/insights?${qs}&time_range={"since":"${since}","until":"${until}"}`;
+
+  const res = await fetch(url);
+  const json = await res.json();
+  if (json.error) throw new Error(`Meta API: ${json.error.message} (code ${json.error.code})`);
+
+  return ((json as { data: RawInsight[] }).data ?? []).map(mapRawInsight);
 }
 
-// ── Ads ────────────────────────────────────────────────────────────────────────
+// ── Ads ────────────────────────────────────────────────────────
 
 export async function fetchMetaAds(token: string, accountId: string): Promise<MetaAd[]> {
   const accountFmt = accountId.startsWith('act_') ? accountId : `act_${accountId}`;
@@ -185,7 +194,7 @@ export async function fetchMetaAds(token: string, accountId: string): Promise<Me
   return result.data ?? [];
 }
 
-// ── Alert generator ────────────────────────────────────────────────────────────
+// ── Alert generator ──────────────────────────────────────────────
 
 export function generateMetaAlerts(insights: MetaInsight[], level: 'campaign' | 'ad'): MetaAlert[] {
   const alerts: MetaAlert[] = [];
@@ -245,7 +254,6 @@ export function generateMetaAlerts(insights: MetaInsight[], level: 'campaign' | 
       });
     }
 
-    // ROAS bajo: solo si hubo gasto significativo y hay datos de conversión
     if (ins.spend > 10 && ins.purchases > 0) {
       const roas = ins.purchaseValue / ins.spend;
       if (roas < 1) {
@@ -274,7 +282,7 @@ export function generateMetaAlerts(insights: MetaInsight[], level: 'campaign' | 
   });
 }
 
-// ── Daily spend ────────────────────────────────────────────────────────────────
+// ── Daily spend ──────────────────────────────────────────────────
 
 /** Convierte YYYY-MM-DD → DD/MM/YYYY para matchear con dayLabel de TiendaNube */
 function metaDateToLabel(dateStr: string): string {
@@ -316,7 +324,7 @@ export async function fetchMetaSpendByDay(
     .filter(r => r.inversion > 0);
 }
 
-// ── Summary ────────────────────────────────────────────────────────────────────
+// ── Summary ──────────────────────────────────────────────────────
 
 export interface MetaSummary {
   totalSpend: number;
