@@ -104,6 +104,27 @@ interface RawInsight {
   action_values?: { action_type: string; value: string }[];
 }
 
+function mapRawInsight(r: RawInsight): MetaInsight {
+  return {
+    campaign_id:   r.campaign_id,
+    campaign_name: r.campaign_name,
+    adset_id:      r.adset_id,
+    adset_name:    r.adset_name,
+    ad_id:         r.ad_id,
+    ad_name:       r.ad_name,
+    impressions:   parseInt(r.impressions  ?? '0') || 0,
+    clicks:        parseInt(r.clicks       ?? '0') || 0,
+    ctr:           parseFloat(r.ctr        ?? '0') || 0,
+    spend:         parseFloat(r.spend      ?? '0') || 0,
+    reach:         parseInt(r.reach        ?? '0') || 0,
+    frequency:     parseFloat(r.frequency  ?? '0') || 0,
+    purchases:     extractAction(r.actions,       'purchase'),
+    purchaseValue: extractAction(r.action_values, 'purchase'),
+    date_start:    r.date_start ?? '',
+    date_stop:     r.date_stop  ?? '',
+  };
+}
+
 export async function fetchMetaInsights(
   token: string,
   accountId: string,
@@ -122,25 +143,30 @@ export async function fetchMetaInsights(
       limit: '200',
     },
   );
+  return (result.data ?? []).map(mapRawInsight);
+}
 
-  return (result.data ?? []).map(r => ({
-    campaign_id:   r.campaign_id,
-    campaign_name: r.campaign_name,
-    adset_id:      r.adset_id,
-    adset_name:    r.adset_name,
-    ad_id:         r.ad_id,
-    ad_name:       r.ad_name,
-    impressions:   parseInt(r.impressions  ?? '0') || 0,
-    clicks:        parseInt(r.clicks       ?? '0') || 0,
-    ctr:           parseFloat(r.ctr        ?? '0') || 0,
-    spend:         parseFloat(r.spend      ?? '0') || 0,
-    reach:         parseInt(r.reach        ?? '0') || 0,
-    frequency:     parseFloat(r.frequency  ?? '0') || 0,
-    purchases:     extractAction(r.actions,       'purchase'),
-    purchaseValue: extractAction(r.action_values, 'purchase'),
-    date_start:    r.date_start ?? '',
-    date_stop:     r.date_stop  ?? '',
-  }));
+export async function fetchMetaInsightsByDateRange(
+  token: string,
+  accountId: string,
+  since: string,
+  until: string,
+  level: 'campaign' | 'adset' | 'ad' = 'campaign',
+): Promise<MetaInsight[]> {
+  const accountFmt = accountId.startsWith('act_') ? accountId : `act_${accountId}`;
+  const result = await metaGet<{ data: RawInsight[] }>(
+    `/${accountFmt}/insights`,
+    token,
+    {
+      fields: 'campaign_id,campaign_name,spend,impressions,clicks,ctr,reach,frequency,actions,action_values,date_start,date_stop',
+      time_range: JSON.stringify({ since, until }),
+      time_increment: '1',
+      level,
+      effective_status: `["ACTIVE","PAUSED","ARCHIVED"]`,
+      limit: '200',
+    },
+  );
+  return (result.data ?? []).map(mapRawInsight);
 }
 
 // ── Ads ────────────────────────────────────────────────────────────────────────
