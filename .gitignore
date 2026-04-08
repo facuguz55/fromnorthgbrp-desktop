@@ -1,1 +1,3 @@
-node_modules/\nsrc-tauri/target/
+node_modules/
+src-tauri/target/
+dist/
