@@ -16,7 +16,7 @@ pub fn run() {
       tauri::async_runtime::spawn(async move {
         if let Ok(updater) = handle.updater() {
           if let Ok(Some(update)) = updater.check().await {
-            let _ = update.download_and_install(|_chunk: u64, _total: Option<u64>| {}, || {}).await;
+            let _ = update.download_and_install(|_chunk: usize, _total: Option<u64>| {}, || {}).await;
           }
         }
       });
